@@ -83,13 +83,15 @@ function StepContent({ state, actions }) {
 
   if (game.currentStep === 3 && game.pendingShot) {
     const { color, x, y } = game.pendingShot;
-    const { tankX, tankY } = game.myPlayer.pos;
+    const myColor = game.myColor;
+    const tankPos = game.players[game.myColor]?.pos;
+    const tankCoord = tankPos ? coordLabel(tankPos.x, tankPos.y) : '--';
     return (
       <div style={{ background: 'var(--bg3)', border: `1px solid ${CVARS[color]}`, padding: 14, marginBottom: 8 }}>
         <div className="step-help">PASSO 3 - POSICIONE AS PEÇAS NO TABULEIRO</div>
         <div style={{ fontSize: 17, fontWeight: 700, letterSpacing: 2 }}>POSICIONE SEU TANQUE FISICO EM:</div>
-        <span style={{ fontFamily: 'Orbitron, monospace', fontSize: 18, color: CVARS[color], letterSpacing: 4 }}>
-          {NAMES[color]} · {coordLabel(tankX, tankY)}
+        <span style={{ fontFamily: 'Orbitron, monospace', fontSize: 18, color: CVARS[myColor], letterSpacing: 4 }}>
+          {NAMES[myColor]} · {tankCoord}
         </span>
         <div className="step-help-lg">
           <div style={{ fontSize: 17, fontWeight: 700, letterSpacing: 2 }}>POSICIONE SEU TARGET EM:</div>
