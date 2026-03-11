@@ -1,23 +1,18 @@
 import React from 'react';
 
 export function Overlays({ state, actions }) {
-  const { overlays, game, CVARS, EMOJI, NAMES, coordLabel, hearts } = state;
+  const { overlays, game, coordLabel, hearts } = state;
 
   return (
     <>
       <div className={`overlay ${overlays.shot ? 'show' : ''}`}>
         <div className="overlay-box">
-          <div className="overlay-title">CONFIRMAR TIRO</div>
-          <div className="muted" style={{ letterSpacing: 2 }}>ALVO</div>
-          <div style={{ fontFamily: 'Orbitron, monospace', fontSize: 18, fontWeight: 700, letterSpacing: 3, color: CVARS[game.shotTarget] }}>
-            {game.shotTarget ? `${EMOJI[game.shotTarget]} ${NAMES[game.shotTarget]}` : '-'}
-          </div>
-          <div className="overlay-coord">
-            {game.pendingShot ? coordLabel(game.pendingShot.x, game.pendingShot.y) : '--'}
-          </div>
-          <div className="muted">Declare em voz alta para todos!</div>
+          <div className="overlay-title">CONFIRMAR BOMBARDEIO</div>
+          <div className="muted" style={{ letterSpacing: 2 }}>COORDENADA</div>
+          <div className="overlay-coord">{game.pendingShot ? coordLabel(game.pendingShot.x, game.pendingShot.y) : '--'}</div>
+          <div className="muted">Posicione a peça de alvo no tabuleiro físico.</div>
           <button type="button" className="btn btn-danger" onClick={actions.confirmShot}>
-            <span>🎯 ATIRAR!</span>
+            <span>🎯 DISPARAR</span>
           </button>
           <button type="button" className="btn btn-ghost" onClick={actions.cancelShot}>
             <span>CANCELAR</span>

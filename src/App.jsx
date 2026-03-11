@@ -44,7 +44,7 @@ export default function App() {
 
       <LobbyScreen active={screen === 'lobby'} state={state} actions={actions} />
       <GameScreen active={screen === 'game'} state={state} actions={actions} />
-      <WaitingScreen active={screen === 'waiting'} state={state} />
+      <WaitingScreen active={screen === 'waiting'} state={state} actions={actions} />
       <EndScreen active={screen === 'end'} state={state} actions={actions} />
       <Overlays state={state} actions={actions} />
     </>

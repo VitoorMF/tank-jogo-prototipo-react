@@ -16,7 +16,7 @@
   --red: #ff4455;
   --blue: #44aaff;
   --verde: #44ff88;
-  --grid-size: min(72vw, 72vh, 320px);
+  --grid-size: min(88vw, 74vh, 460px);
 }
 
 * {
@@ -440,7 +440,7 @@ input {
 .target-picker,
 .target-grid-wrap {
   width: 100%;
-  max-width: 320px;
+  max-width: 380px;
 }
 
 .target-header {
@@ -501,6 +501,38 @@ input {
 .target-grid-wrap {
   padding: 12px;
   border: 2px solid;
+}
+
+.coord-inputs {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.coord-input {
+  width: 92px;
+  background: var(--bg3);
+  border: 2px solid var(--border);
+  color: var(--text);
+  font-family: 'Orbitron', monospace;
+  font-size: 34px;
+  font-weight: 700;
+  text-align: center;
+  text-transform: uppercase;
+  padding: 8px 6px;
+  outline: none;
+}
+
+.coord-input:focus {
+  border-color: var(--accent);
+}
+
+.coord-sep {
+  color: var(--textdim);
+  font-family: 'Orbitron', monospace;
+  font-size: 28px;
+  letter-spacing: 2px;
 }
 
 .target-grid-label {
@@ -571,6 +603,14 @@ input {
   gap: 2px;
 }
 
+.board-8x8.full-board {
+  --grid-size: min(88vw, 74vh, 460px);
+}
+
+.board-8x8.mobile-zone {
+  --grid-size: min(78vw, 60vh, 300px);
+}
+
 .cell {
   aspect-ratio: 1;
   border: 1px solid var(--border);
@@ -594,15 +634,19 @@ input {
   content: '🪖';
 }
 
-.cell.destroyed {
+.cell.tank.shot::after {
+  content: '🪖';
+}
+
+.cell.shot {
   background: var(--bg);
   border-color: #1a1a1a;
 }
 
-.cell.destroyed::after {
-  content: '✕';
-  color: #2a2a2a;
-  font-size: 14px;
+.cell.shot::after {
+  content: '◎';
+  color: #3b4554;
+  font-size: 12px;
   font-family: 'Share Tech Mono', monospace;
 }
 
@@ -765,7 +809,7 @@ input {
 
 .step-help {
   font-family: 'Share Tech Mono', monospace;
-  font-size: 10px;
+  font-size: 14px;
   color: var(--textdim);
   margin-bottom: 6px;
   letter-spacing: 2px;
@@ -794,6 +838,32 @@ input {
   letter-spacing: 3px;
 }
 
+.btn-leave {
+  border: 0;
+  background: transparent;
+  color: rgba(255, 68, 85, 0.72);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: 6px 4px;
+}
+
+.btn-leave:hover {
+  color: var(--accent2);
+  text-decoration: underline;
+}
+
+.leave-bottom {
+  margin-top: auto;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  padding-top: 10px;
+  padding-bottom: 4px;
+}
+
 .gap-s {
   height: 8px;
 }
@@ -811,6 +881,7 @@ input {
 }
 
 @keyframes pulse {
+
   0%,
   100% {
     opacity: 1;
@@ -822,6 +893,7 @@ input {
 }
 
 @keyframes wPulse {
+
   0%,
   100% {
     transform: scale(1);

@@ -25,7 +25,7 @@ export function EndScreen({ active, state, actions }) {
           <span className="stat-val">{endStats.shots}</span>
         </div>
         <div className="stat-row">
-          <span>CELULAS DESTRUIDAS</span>
+          <span>ALVOS MARCADOS</span>
           <span className="stat-val">{endStats.destroyed}</span>
         </div>
         <div className="stat-row">
