@@ -43,6 +43,14 @@ function StepContent({ state, actions }) {
     );
   }
 
+  if (game.currentStep === 2) {
+    return (
+      <div className="muted" style={{ textAlign: 'center', padding: '16px 0' }}>
+        Confirme ou cancele o disparo na janela acima.
+      </div>
+    );
+  }
+
   if (game.currentStep === 3 && game.pendingShot && myPlayer?.pos && game.myColor) {
     const { x, y } = game.pendingShot;
     const tankColor = game.myColor;
@@ -50,20 +58,22 @@ function StepContent({ state, actions }) {
 
     return (
       <div style={{ background: 'var(--bg3)', border: '1px solid var(--accent)', padding: 14, marginBottom: 8 }}>
-        <div className="step-help">PASSO 3 - POSICIONE AS PEÇAS NO TABULEIRO FÍSICO</div>
-        <br />
-        <div style={{ fontSize: 12, letterSpacing: 2 }}>POSIÇÃO DO SEU TANQUE (ÚLTIMA CONHECIDA):</div>
-        <span style={{ fontFamily: 'Orbitron, monospace', fontSize: 18, color: CVARS[tankColor], letterSpacing: 4 }}>
-          {NAMES[tankColor]} · {coordLabel(tankX, tankY)}
-        </span>
+        <div className="step-help" style={{ marginBottom: 16 }}>PASSO 3 · POSICIONE NO TABULEIRO FÍSICO</div>
 
-        <div className="step-help-lg">
-          <div style={{ fontSize: 12, letterSpacing: 2 }}>POSICIONE A PEÇA DE ALVO EM:</div>
-          <span style={{ fontFamily: 'Orbitron, monospace', fontSize: 18, color: 'var(--accent)', letterSpacing: 4 }}>
-            {coordLabel(x, y)}
-          </span>
-          <br />
-          <span style={{ fontSize: 10 }}>(coordenada do tiro desta rodada)</span>
+        <div style={{ display: 'flex', gap: 16 }}>
+          <div style={{ flex: 1 }}>
+            <div className="muted" style={{ fontSize: 10, letterSpacing: 2, marginBottom: 4 }}>SEU TANQUE</div>
+            <div style={{ fontFamily: 'Orbitron, monospace', fontSize: 22, color: CVARS[tankColor], letterSpacing: 4 }}>
+              {coordLabel(tankX, tankY)}
+            </div>
+          </div>
+
+          <div style={{ flex: 1 }}>
+            <div className="muted" style={{ fontSize: 10, letterSpacing: 2, marginBottom: 4 }}>ALVO DO TIRO</div>
+            <div style={{ fontFamily: 'Orbitron, monospace', fontSize: 22, color: 'var(--accent)', letterSpacing: 4 }}>
+              {coordLabel(x, y)}
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -140,6 +150,11 @@ export function GameScreen({ active, state, actions }) {
       {game.currentStep === 3 && (
         <button type="button" className="btn btn-ghost" onClick={actions.proceedToStep4}>
           <span>POSICIONEI - MOVER</span>
+        </button>
+      )}
+      {game.currentStep === 4 && !turnDone && (
+        <button type="button" className="btn btn-ghost" onClick={actions.advanceTurn}>
+          <span>FICAR AQUI</span>
         </button>
       )}
       {game.currentStep === 4 && turnDone && (

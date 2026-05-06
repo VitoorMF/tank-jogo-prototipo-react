@@ -1,7 +1,7 @@
 import React from 'react';
 
 export function Overlays({ state, actions }) {
-  const { overlays, game, coordLabel, hearts } = state;
+  const { overlays, game, coordLabel, hearts, NAMES, CVARS } = state;
 
   return (
     <>
@@ -32,6 +32,18 @@ export function Overlays({ state, actions }) {
           </div>
           <button type="button" className="btn" onClick={actions.dismissHit}>
             <span>ENTENDI</span>
+          </button>
+        </div>
+      </div>
+
+      <div className={`overlay ${overlays.elimAnnounce ? 'show' : ''}`}>
+        <div className="overlay-box" style={{ borderColor: CVARS[overlays.elimAnnounce] }}>
+          <div style={{ fontSize: 52 }}>💀</div>
+          <div className="overlay-title" style={{ color: CVARS[overlays.elimAnnounce] }}>
+            {NAMES[overlays.elimAnnounce]} ELIMINADO!
+          </div>
+          <button type="button" className="btn" onClick={actions.dismissEliminationAnnounce}>
+            <span>OK</span>
           </button>
         </div>
       </div>

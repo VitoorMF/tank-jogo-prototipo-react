@@ -29,7 +29,7 @@ export function LobbyScreen({ active, state, actions }) {
             >
               <div className="dot" style={filled ? { background: CVARS[c] } : undefined} />
               <span>
-                {EMOJI[c]} {NAMES[c]}
+                {EMOJI[c]} {game.players[c]?.name || NAMES[c]}
               </span>
               <span className="slot-status">{filled ? (c === game.myColor ? 'VOCE' : 'CONECTADO') : 'AGUARDANDO'}</span>
             </div>
