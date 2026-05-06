@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ArenaGrid } from '../components/ArenaGrid';
 
 function StepContent({ state, actions }) {
-  const { game, NAMES, CVARS, coordLabel, turnDone, myPlayer } = state;
+  const { game, CVARS, coordLabel, turnDone, myPlayer } = state;
 
   if (game.currentStep === 1) {
     return (
@@ -37,28 +37,20 @@ function StepContent({ state, actions }) {
 
         <div className="gap-s" />
         <button type="button" className="btn" onClick={actions.stageShotFromInput}>
-          <span>CONFIRMAR COORDENADA</span>
+          <span>ATIRAR</span>
         </button>
       </>
     );
   }
 
-  if (game.currentStep === 2) {
-    return (
-      <div className="muted" style={{ textAlign: 'center', padding: '16px 0' }}>
-        Confirme ou cancele o disparo na janela acima.
-      </div>
-    );
-  }
-
-  if (game.currentStep === 3 && game.pendingShot && myPlayer?.pos && game.myColor) {
+  if (game.currentStep === 2 && game.pendingShot && myPlayer?.pos && game.myColor) {
     const { x, y } = game.pendingShot;
     const tankColor = game.myColor;
     const { x: tankX, y: tankY } = myPlayer.pos;
 
     return (
       <div style={{ background: 'var(--bg3)', border: '1px solid var(--accent)', padding: 14, marginBottom: 8 }}>
-        <div className="step-help" style={{ marginBottom: 16 }}>PASSO 3 · POSICIONE NO TABULEIRO FÍSICO</div>
+        <div className="step-help" style={{ marginBottom: 16 }}>PASSO 2 · POSICIONE NO TABULEIRO FÍSICO</div>
 
         <div style={{ display: 'flex', gap: 16 }}>
           <div style={{ flex: 1 }}>
@@ -79,10 +71,10 @@ function StepContent({ state, actions }) {
     );
   }
 
-  if (game.currentStep === 4) {
+  if (game.currentStep === 3) {
     return (
       <>
-        <div className="muted" style={{ marginBottom: 8 }}>PASSO 4 · TOQUE PARA ONDE MOVER SEU TANQUE</div>
+        <div className="muted" style={{ marginBottom: 8 }}>PASSO 3 · TOQUE PARA ONDE MOVER SEU TANQUE</div>
         {turnDone && (
           <div className="turn-done">
             <div className="turn-done-title">TURNO CONCLUIDO</div>
@@ -124,10 +116,10 @@ export function GameScreen({ active, state, actions }) {
       <div className="turn-badge" style={{ borderLeftColor: turnBadge.color, color: turnBadge.color }}>{turnBadge.text}</div>
 
       <div className="steps">
-        {[1, 2, 3, 4].map((step) => (
+        {[1, 2, 3].map((step) => (
           <div key={step} className={`step ${game.currentStep === step ? 'active' : ''} ${game.currentStep > step ? 'done' : ''}`}>
             <span className="step-num">{step}</span>
-            {step === 1 ? 'COORD.' : step === 2 ? 'ATIRAR' : step === 3 ? 'POSIC.' : 'MOVER'}
+            {step === 1 ? 'COORD.' : step === 2 ? 'POSIC.' : 'MOVER'}
           </div>
         ))}
       </div>
@@ -136,28 +128,28 @@ export function GameScreen({ active, state, actions }) {
         <StepContent state={state} actions={actions} />
       </div>
 
-      <div className="section-title" style={{ marginTop: 10 }}>TABULEIRO 4x4 · SUA ZONA</div>
+      <div className="section-title" style={{ marginTop: 10 }}>SUA ZONA</div>
       <ArenaGrid
         myColor={game.myColor}
         myPos={myPlayer?.pos}
         shotCells={game.boardShots}
-        mode={game.currentStep === 4 && !turnDone ? 'move' : 'view'}
+        mode={game.currentStep === 3 && !turnDone ? 'move' : 'view'}
         onMove={actions.moveMyTank}
         colorVar={CVARS[game.myColor]}
       />
 
       <div className="gap-s" />
-      {game.currentStep === 3 && (
-        <button type="button" className="btn btn-ghost" onClick={actions.proceedToStep4}>
+      {game.currentStep === 2 && (
+        <button type="button" className="btn btn-ghost" onClick={actions.proceedToMove}>
           <span>POSICIONEI - MOVER</span>
         </button>
       )}
-      {game.currentStep === 4 && !turnDone && (
+      {game.currentStep === 3 && !turnDone && (
         <button type="button" className="btn btn-ghost" onClick={actions.advanceTurn}>
           <span>FICAR AQUI</span>
         </button>
       )}
-      {game.currentStep === 4 && turnDone && (
+      {game.currentStep === 3 && turnDone && (
         <button type="button" className="btn btn-ghost" onClick={actions.advanceTurn}>
           <span>FINALIZAR TURNO</span>
         </button>

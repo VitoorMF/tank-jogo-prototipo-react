@@ -71,7 +71,7 @@ export function useTankBattle() {
   const [timerValue, setTimerValue] = useState(TURN_DURATION_SECONDS);
   const [notif, setNotif] = useState({ show: false, msg: '', type: 'info' });
   const [online, setOnline] = useState(false);
-  const [overlays, setOverlays] = useState({ shot: false, hit: false, elim: false, elimAnnounce: null });
+  const [overlays, setOverlays] = useState({ hit: false, elim: false, elimAnnounce: null });
   const [turnDone, setTurnDone] = useState(false);
 
   const gameRef = useRef(game);
@@ -449,7 +449,7 @@ export function useTankBattle() {
     setScreen('home');
     setJoinCode('');
     setTimerValue(TURN_DURATION_SECONDS);
-    setOverlays({ shot: false, hit: false, elim: false });
+    setOverlays({ hit: false, elim: false, elimAnnounce: null });
     setTurnDone(false);
   }, [clearSession, push, stopTimer]);
 
@@ -488,30 +488,6 @@ export function useTankBattle() {
     setGame((prev) => ({ ...prev, shotRow: next }));
   }, []);
 
-  const stageShotFromInput = useCallback(() => {
-    const g = gameRef.current;
-
-    const parsed = parseCoordInput(`${g.shotCol}${g.shotRow}`);
-    if (!parsed) {
-      showNotif('Coordenada inválida. Use A-H e 1-8.', 'miss');
-      return;
-    }
-
-    const key = coordKey(parsed.x, parsed.y);
-    const alreadyShot = g.boardShots.some((shot) => coordKey(shot.x, shot.y) === key);
-    if (alreadyShot) {
-      showNotif('Essa coordenada já recebeu alvo.', 'miss');
-      return;
-    }
-
-    setGame((prev) => ({
-      ...prev,
-      pendingShot: { x: parsed.x, y: parsed.y },
-      currentStep: 2,
-    }));
-    setOverlays((o) => ({ ...o, shot: true }));
-  }, [showNotif]);
-
   const applyHit = useCallback(
     (color, players, turnOrder) => {
       const p = players[color];
@@ -530,23 +506,11 @@ export function useTankBattle() {
     [showNotif],
   );
 
-  const confirmShot = useCallback(async () => {
-    setOverlays((o) => ({ ...o, shot: false }));
-
+  const fireShot = useCallback(async (x, y) => {
     const g = gameRef.current;
-    if (!g.pendingShot) return;
-
-    const { x, y } = g.pendingShot;
     const players = clonePlayers(g.players);
     const boardShots = cloneBoardShots(g.boardShots);
     let turnOrder = [...g.turnOrder];
-
-    const alreadyShot = boardShots.some((shot) => shot.x === x && shot.y === y);
-    if (alreadyShot) {
-      showNotif('Essa coordenada já recebeu alvo.', 'miss');
-      setGame((prev) => ({ ...prev, currentStep: 1, pendingShot: null }));
-      return;
-    }
 
     const hitColor = turnOrder.find((playerColor) => {
       if (playerColor === g.myColor) return false;
@@ -564,13 +528,7 @@ export function useTankBattle() {
       }
     }
 
-    boardShots.push({
-      x,
-      y,
-      by: g.myColor,
-      targetColor: hitColor || null,
-      round: g.round,
-    });
+    boardShots.push({ x, y, by: g.myColor, targetColor: hitColor || null, round: g.round });
 
     const nextGame = {
       ...g,
@@ -580,20 +538,33 @@ export function useTankBattle() {
       eliminationOrder,
       myShots: g.myShots + 1,
       pendingShot: { x, y },
-      currentStep: 3,
+      currentStep: 2,
     };
 
     setGame(nextGame);
     await push(nextGame);
-  }, [applyHit, push, showNotif]);
+  }, [applyHit, push]);
 
-  const cancelShot = useCallback(() => {
-    setOverlays((o) => ({ ...o, shot: false }));
-    setGame((prev) => ({ ...prev, pendingShot: null, currentStep: 1 }));
-  }, []);
+  const stageShotFromInput = useCallback(async () => {
+    const g = gameRef.current;
 
-  const proceedToStep4 = useCallback(() => {
-    setGame((prev) => ({ ...prev, currentStep: 4 }));
+    const parsed = parseCoordInput(`${g.shotCol}${g.shotRow}`);
+    if (!parsed) {
+      showNotif('Coordenada inválida. Use A-H e 1-8.', 'miss');
+      return;
+    }
+
+    const alreadyShot = g.boardShots.some((shot) => coordKey(shot.x, shot.y) === coordKey(parsed.x, parsed.y));
+    if (alreadyShot) {
+      showNotif('Essa coordenada já recebeu alvo.', 'miss');
+      return;
+    }
+
+    await fireShot(parsed.x, parsed.y);
+  }, [fireShot, showNotif]);
+
+  const proceedToMove = useCallback(() => {
+    setGame((prev) => ({ ...prev, currentStep: 3 }));
   }, []);
 
   const moveMyTank = useCallback(
@@ -798,9 +769,7 @@ export function useTankBattle() {
       setShotCol,
       setShotRow,
       stageShotFromInput,
-      confirmShot,
-      cancelShot,
-      proceedToStep4,
+      proceedToMove,
       moveMyTank,
       dismissHit,
       confirmElimination,
