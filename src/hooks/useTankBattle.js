@@ -10,6 +10,7 @@ import {
   coordKey,
   coordLabel,
   hearts,
+  isInsideZone,
   migrateLegacyDestroyed,
   mkBoardShots,
   mkPlayers,
@@ -18,6 +19,7 @@ import {
 import { db } from '../services/supabase';
 
 const SESSION_KEY = 'tb_session';
+const NAME_KEY = 'tb_player_name';
 const TURN_DURATION_SECONDS = 90;
 
 const initialGame = {
@@ -37,6 +39,8 @@ const initialGame = {
   shotCol: '',
   shotRow: '',
   myShots: 0,
+  roundSnapshot: null,
+  eliminationOrder: [],
 };
 
 function normalizeSharedState(state) {
@@ -54,6 +58,8 @@ function normalizeSharedState(state) {
     gameStarted: state?.gameStarted || false,
     gameOver: state?.gameOver || false,
     winner: state?.winner || null,
+    roundSnapshot: state?.roundSnapshot || null,
+    eliminationOrder: state?.eliminationOrder || [],
   };
 }
 
@@ -61,10 +67,11 @@ export function useTankBattle() {
   const [game, setGame] = useState(initialGame);
   const [screen, setScreen] = useState('home');
   const [joinCode, setJoinCode] = useState('');
+  const [myName, setMyNameState] = useState(() => localStorage.getItem(NAME_KEY) || '');
   const [timerValue, setTimerValue] = useState(TURN_DURATION_SECONDS);
   const [notif, setNotif] = useState({ show: false, msg: '', type: 'info' });
   const [online, setOnline] = useState(false);
-  const [overlays, setOverlays] = useState({ shot: false, hit: false, elim: false });
+  const [overlays, setOverlays] = useState({ shot: false, hit: false, elim: false, elimAnnounce: null });
   const [turnDone, setTurnDone] = useState(false);
 
   const gameRef = useRef(game);
@@ -72,6 +79,7 @@ export function useTankBattle() {
   const channelRef = useRef(null);
   const prevLivesRef = useRef(3);
   const wasElimRef = useRef(false);
+  const prevEliminatedRef = useRef(new Set());
   const intentionalLeaveRef = useRef(false);
 
   useEffect(() => {
@@ -125,6 +133,8 @@ export function useTankBattle() {
       gameStarted: g.gameStarted,
       gameOver: g.gameOver,
       winner: g.winner,
+      roundSnapshot: g.roundSnapshot,
+      eliminationOrder: g.eliminationOrder,
     };
   }, []);
 
@@ -176,6 +186,7 @@ export function useTankBattle() {
       turnOrder: nextTurnOrder,
       currentTurnIdx: nextIdx,
       round: nextRound,
+      roundSnapshot: nextRound > g.round ? clonePlayers(nextPlayers) : g.roundSnapshot,
       currentStep: 0,
       pendingShot: null,
       shotCol: '',
@@ -245,6 +256,14 @@ export function useTankBattle() {
     const myPlayer = g.players[g.myColor];
     if (!myPlayer) return;
 
+    COLORS.forEach((color) => {
+      if (color === g.myColor) return;
+      if (g.players[color]?.eliminated && !prevEliminatedRef.current.has(color)) {
+        prevEliminatedRef.current.add(color);
+        setOverlays((o) => ({ ...o, elimAnnounce: color }));
+      }
+    });
+
     if (myPlayer.eliminated && !wasElimRef.current) {
       wasElimRef.current = true;
       setOverlays((o) => ({ ...o, elim: true }));
@@ -259,7 +278,7 @@ export function useTankBattle() {
     if (currentPlayer() === g.myColor) {
       if (g.currentStep === 0) startMyTurn();
       else setScreenSafely('game');
-    } else {
+    } else if (g.currentStep === 0) {
       showWaiting();
     }
   }, [currentPlayer, setScreenSafely, showWaiting, startMyTurn, stopTimer]);
@@ -298,6 +317,12 @@ export function useTankBattle() {
     reactToState,
   ]);
 
+  const setMyName = useCallback((value) => {
+    const trimmed = value.slice(0, 16);
+    setMyNameState(trimmed);
+    localStorage.setItem(NAME_KEY, trimmed);
+  }, []);
+
   const selectColor = useCallback((color) => {
     setGame((prev) => ({ ...prev, myColor: color }));
   }, []);
@@ -312,6 +337,7 @@ export function useTankBattle() {
     const roomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
     const players = mkPlayers();
     players[g.myColor].active = true;
+    players[g.myColor].name = myName.trim();
 
     const nextGame = {
       ...g,
@@ -376,6 +402,7 @@ export function useTankBattle() {
     const parsed = normalizeSharedState(st);
     const players = clonePlayers(parsed.players);
     players[g.myColor].active = true;
+    players[g.myColor].name = myName.trim();
 
     const nextGame = {
       ...g,
@@ -442,6 +469,7 @@ export function useTankBattle() {
       round: 1,
       currentStep: 0,
       pendingShot: null,
+      roundSnapshot: clonePlayers(players),
       shotCol: '',
       shotRow: '',
     };
@@ -526,9 +554,14 @@ export function useTankBattle() {
       return p && !p.eliminated && p.pos?.x === x && p.pos?.y === y;
     });
 
+    let eliminationOrder = [...g.eliminationOrder];
     if (hitColor) {
       const hitResult = applyHit(hitColor, players, turnOrder);
       turnOrder = hitResult.turnOrder;
+      if (players[hitColor].eliminated) {
+        players[hitColor].killedBy = g.myColor;
+        eliminationOrder = [...eliminationOrder, hitColor];
+      }
     }
 
     boardShots.push({
@@ -544,6 +577,7 @@ export function useTankBattle() {
       players,
       boardShots,
       turnOrder,
+      eliminationOrder,
       myShots: g.myShots + 1,
       pendingShot: { x, y },
       currentStep: 3,
@@ -565,6 +599,10 @@ export function useTankBattle() {
   const moveMyTank = useCallback(
     (x, y) => {
       if (turnDone) return;
+      if (!isInsideZone(gameRef.current.myColor, x, y)) {
+        showNotif('Mova dentro da sua zona!', 'miss');
+        return;
+      }
       setGame((prev) => {
         const players = clonePlayers(prev.players);
         players[prev.myColor].pos = { x, y };
@@ -573,14 +611,18 @@ export function useTankBattle() {
       stopTimer();
       setTurnDone(true);
     },
-    [stopTimer, turnDone],
+    [showNotif, stopTimer, turnDone],
   );
+
+  const dismissEliminationAnnounce = useCallback(() => {
+    setOverlays((o) => ({ ...o, elimAnnounce: null }));
+  }, []);
 
   const dismissHit = useCallback(() => {
     setOverlays((o) => ({ ...o, hit: false }));
   }, []);
 
-  const confirmElimination = useCallback(async () => {
+  const confirmElimination = useCallback(() => {
     setOverlays((o) => ({ ...o, elim: false }));
 
     const g = gameRef.current;
@@ -591,17 +633,14 @@ export function useTankBattle() {
     const turnOrder = g.turnOrder.filter((c) => c !== g.myColor);
     const alive = turnOrder.filter((c) => !players[c].eliminated);
 
-    const nextGame = {
+    setGame({
       ...g,
       players,
       turnOrder,
       gameOver: alive.length <= 1,
       winner: alive.length <= 1 ? alive[0] || null : null,
-    };
-
-    setGame(nextGame);
-    await push(nextGame);
-  }, [push]);
+    });
+  }, []);
 
   useEffect(() => {
     const init = async () => {
@@ -658,6 +697,7 @@ export function useTankBattle() {
       };
 
       prevLivesRef.current = nextGame.players[sess.myColor].lives;
+      COLORS.forEach((c) => { if (nextGame.players[c]?.eliminated) prevEliminatedRef.current.add(c); });
       setGame(nextGame);
       subscribe(sess.roomCode);
       showNotif('RECONECTADO! ✅', 'info');
@@ -695,13 +735,24 @@ export function useTankBattle() {
   const waitingMsg = activeTurnColor ? `VEZ DO ${NAMES[activeTurnColor]}` : 'AGUARDANDO...';
 
   const endStats = useMemo(() => {
+    const myHits = game.boardShots.filter((s) => s.by === game.myColor && s.targetColor !== null).length;
+    const accuracy = game.myShots > 0 ? Math.round((myHits / game.myShots) * 100) : 0;
+    const killedBy = myPlayer?.killedBy || null;
+    const ranking = [
+      ...game.eliminationOrder.map((color, i) => ({ color, position: i + 1 })),
+      ...(game.winner ? [{ color: game.winner, position: null }] : []),
+    ];
     return {
       rounds: game.round,
       shots: game.myShots,
-      destroyed: game.boardShots.length,
+      hits: myHits,
+      misses: game.myShots - myHits,
+      accuracy,
       lives: myPlayer?.lives || 0,
+      killedBy,
+      ranking,
     };
-  }, [game.boardShots.length, game.myShots, game.round, myPlayer?.lives]);
+  }, [game.boardShots, game.eliminationOrder, game.myColor, game.myShots, game.winner, myPlayer?.killedBy, myPlayer?.lives]);
 
   const turnBadge =
     activeTurnColor === game.myColor
@@ -713,6 +764,7 @@ export function useTankBattle() {
       game,
       screen,
       joinCode,
+      myName,
       timerValue,
       notif,
       online,
@@ -737,6 +789,7 @@ export function useTankBattle() {
     actions: {
       setScreen: setScreenSafely,
       setJoinCode,
+      setMyName,
       selectColor,
       createRoom,
       joinRoom,
@@ -751,6 +804,7 @@ export function useTankBattle() {
       moveMyTank,
       dismissHit,
       confirmElimination,
+      dismissEliminationAnnounce,
       advanceTurn,
       clearSession,
     },

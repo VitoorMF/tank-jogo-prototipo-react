@@ -13,14 +13,20 @@ import { WaitingScreen } from './screens/WaitingScreen';
 
 export default function App() {
   const { state, actions } = useTankBattle();
-  const { screen, notif, online, game, joinCode } = state;
+  const { screen, notif, online, game, joinCode, myName } = state;
 
   return (
     <>
       <NotificationBar notif={notif} />
       <ConnectionStatus online={online} />
 
-      <HomeScreen active={screen === 'home'} onCreate={() => actions.setScreen('create')} onJoin={() => actions.setScreen('join')} />
+      <HomeScreen
+        active={screen === 'home'}
+        myName={myName}
+        onSetMyName={actions.setMyName}
+        onCreate={() => actions.setScreen('create')}
+        onJoin={() => actions.setScreen('join')}
+      />
 
       <CreateScreen
         active={screen === 'create'}

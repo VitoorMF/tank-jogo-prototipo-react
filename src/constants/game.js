@@ -45,11 +45,16 @@ export const ZONE_LABELS = {
   verde: 'E5-H8',
 };
 
+const randInZone = (zone) => ({
+  x: zone.minX + Math.floor(Math.random() * (zone.maxX - zone.minX + 1)),
+  y: zone.minY + Math.floor(Math.random() * (zone.maxY - zone.minY + 1)),
+});
+
 export const mkPlayers = () => ({
-  yellow: { lives: 3, pos: { x: 2, y: 2 }, active: false, eliminated: false },
-  red: { lives: 3, pos: { x: 2, y: 7 }, active: false, eliminated: false },
-  blue: { lives: 3, pos: { x: 7, y: 2 }, active: false, eliminated: false },
-  verde: { lives: 3, pos: { x: 7, y: 7 }, active: false, eliminated: false },
+  yellow: { lives: 3, pos: randInZone(COLOR_ZONES.yellow), active: false, eliminated: false, killedBy: null, name: '' },
+  red: { lives: 3, pos: randInZone(COLOR_ZONES.red), active: false, eliminated: false, killedBy: null, name: '' },
+  blue: { lives: 3, pos: randInZone(COLOR_ZONES.blue), active: false, eliminated: false, killedBy: null, name: '' },
+  verde: { lives: 3, pos: randInZone(COLOR_ZONES.verde), active: false, eliminated: false, killedBy: null, name: '' },
 });
 
 export const mkBoardShots = () => [];
