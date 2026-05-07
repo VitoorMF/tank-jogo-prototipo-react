@@ -1,25 +1,11 @@
 import React from 'react';
+import { SKILLS, hearts as heartsOf } from '../constants/game';
 
 export function Overlays({ state, actions }) {
-  const { overlays, game, coordLabel, hearts, NAMES, CVARS } = state;
+  const { overlays, game, coordLabel, hearts, NAMES, CVARS, COLORS } = state;
 
   return (
     <>
-      <div className={`overlay ${overlays.shot ? 'show' : ''}`}>
-        <div className="overlay-box">
-          <div className="overlay-title">CONFIRMAR BOMBARDEIO</div>
-          <div className="muted" style={{ letterSpacing: 2 }}>COORDENADA</div>
-          <div className="overlay-coord">{game.pendingShot ? coordLabel(game.pendingShot.x, game.pendingShot.y) : '--'}</div>
-          <div className="muted">Posicione a peça de alvo no tabuleiro físico.</div>
-          <button type="button" className="btn btn-danger" onClick={actions.confirmShot}>
-            <span>🎯 DISPARAR</span>
-          </button>
-          <button type="button" className="btn btn-ghost" onClick={actions.cancelShot}>
-            <span>CANCELAR</span>
-          </button>
-        </div>
-      </div>
-
       <div className={`overlay ${overlays.hit ? 'show' : ''}`}>
         <div className="overlay-box" style={{ borderColor: 'var(--accent2)' }}>
           <div style={{ fontSize: 52 }}>💥</div>
@@ -43,6 +29,54 @@ export function Overlays({ state, actions }) {
             {NAMES[overlays.elimAnnounce]} ELIMINADO!
           </div>
           <button type="button" className="btn" onClick={actions.dismissEliminationAnnounce}>
+            <span>OK</span>
+          </button>
+        </div>
+      </div>
+
+      <div className={`overlay ${overlays.viewLives ? 'show' : ''}`}>
+        <div className="overlay-box">
+          <div className="overlay-title" style={{ color: 'var(--green)' }}>👁️ VIDAS INIMIGAS</div>
+          <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 8, margin: '8px 0' }}>
+            {COLORS.filter((c) => c !== game.myColor).map((c) => {
+              const p = game.players[c];
+              if (!p?.active && !p?.eliminated) return null;
+              return (
+                <div key={c} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontFamily: 'Orbitron, monospace', fontSize: 12, color: CVARS[c] }}>{NAMES[c]}</span>
+                  <span style={{ fontSize: 16 }}>{p.eliminated ? '💀' : heartsOf(p.lives)}</span>
+                </div>
+              );
+            })}
+          </div>
+          <div className="muted" style={{ fontSize: 10, textAlign: 'center', marginBottom: 8 }}>
+            SÓ VOCÊ VIU ISSO
+          </div>
+          <button type="button" className="btn" onClick={actions.dismissViewLives}>
+            <span>FECHAR</span>
+          </button>
+        </div>
+      </div>
+
+      <div className={`overlay ${overlays.skillActivated ? 'show' : ''}`}>
+        <div className="overlay-box" style={{ borderColor: 'var(--green)' }}>
+          {overlays.skillActivated && (() => {
+            const skill = SKILLS[overlays.skillActivated];
+            return (
+              <>
+                <div style={{ fontSize: 48 }}>{skill?.emoji || '⚡'}</div>
+                <div className="overlay-title" style={{ color: 'var(--green)' }}>SKILL ATIVADA!</div>
+                <div style={{ fontFamily: 'Orbitron, monospace', fontSize: 14, color: 'var(--green)', letterSpacing: 2 }}>
+                  {skill?.name}
+                </div>
+                <div className="muted" style={{ textAlign: 'center', marginTop: 4, fontSize: 12 }}>
+                  {skill?.desc}
+                </div>
+              </>
+            );
+          })()}
+          <div style={{ marginTop: 12 }} />
+          <button type="button" className="btn" onClick={actions.dismissSkillActivated}>
             <span>OK</span>
           </button>
         </div>

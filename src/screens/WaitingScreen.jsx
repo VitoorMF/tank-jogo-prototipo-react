@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ArenaGrid } from '../components/ArenaGrid';
+import { QRScanner } from '../components/QRScanner';
 import { hearts } from '../constants/game';
 
 function PlayerStatusRow({ color, player, snapshotPlayer, isActive, NAMES, CVARS }) {
@@ -25,8 +26,9 @@ function PlayerStatusRow({ color, player, snapshotPlayer, isActive, NAMES, CVARS
 }
 
 export function WaitingScreen({ active, state, actions }) {
-  const { game, myPlayer, waitingMsg, CVARS, NAMES, COLORS, activeTurnColor } = state;
+  const { game, myPlayer, waitingMsg, CVARS, NAMES, COLORS, activeTurnColor, skillUsedThisRound } = state;
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
 
   return (
     <div className={`screen ${active ? 'active' : ''}`}>
@@ -63,6 +65,29 @@ export function WaitingScreen({ active, state, actions }) {
         mode="view"
         colorVar={CVARS[game.myColor]}
       />
+      {!skillUsedThisRound && (
+        <div style={{ marginTop: 12 }}>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            style={{ fontSize: 12, borderColor: 'var(--green)', color: 'var(--green)' }}
+            onClick={() => setShowScanner(true)}
+          >
+            <span>🎴 LER CARTA DE SKILL</span>
+          </button>
+        </div>
+      )}
+
+      {showScanner && (
+        <QRScanner
+          onScan={(skillId) => {
+            setShowScanner(false);
+            actions.activateSkill(skillId);
+          }}
+          onClose={() => setShowScanner(false)}
+        />
+      )}
+
       <div className="leave-bottom">
         <button type="button" className="btn-leave" onClick={() => setShowLeaveConfirm(true)}>
           SAIR DA PARTIDA

@@ -1,15 +1,53 @@
 import React, { useState } from 'react';
 import { ArenaGrid } from '../components/ArenaGrid';
+import { QRScanner } from '../components/QRScanner';
+import { SKILLS } from '../constants/game';
+
+function ActiveEffects({ myPlayer }) {
+  const effects = myPlayer?.activeEffects || {};
+  const active = Object.entries(effects).filter(([, v]) => v);
+  if (!active.length) return null;
+  return (
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+      {active.map(([id]) => {
+        const skill = SKILLS[id];
+        if (!skill) return null;
+        return (
+          <span
+            key={id}
+            style={{
+              fontSize: 10,
+              letterSpacing: 1,
+              padding: '3px 8px',
+              border: '1px solid var(--green)',
+              color: 'var(--green)',
+              borderRadius: 3,
+              fontFamily: 'Barlow Condensed, sans-serif',
+            }}
+          >
+            {skill.emoji} {skill.name}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
 
 function StepContent({ state, actions }) {
   const { game, CVARS, coordLabel, turnDone, myPlayer } = state;
+  const myEffects = myPlayer?.activeEffects || {};
 
   if (game.currentStep === 1) {
     return (
       <>
+        {game.doubleshotFired && (
+          <div style={{ color: 'var(--green)', fontSize: 11, letterSpacing: 2, marginBottom: 8, textAlign: 'center' }}>
+            🎯 1º TIRO EFETUADO · DISPARE O 2º
+          </div>
+        )}
         <div className="target-grid-wrap" style={{ borderColor: 'var(--accent)', background: 'rgba(0,0,0,0.15)' }}>
           <div className="target-grid-label" style={{ color: 'var(--accent)' }}>
-            PASSO 1 · COORDENADA DE BOMBARDEIO
+            {game.doubleshotFired ? 'PASSO 1 · 2ª COORDENADA' : 'PASSO 1 · COORDENADA DE BOMBARDEIO'}
           </div>
 
           <div className="coord-inputs">
@@ -43,10 +81,10 @@ function StepContent({ state, actions }) {
     );
   }
 
-  if (game.currentStep === 2 && game.pendingShot && myPlayer?.pos && game.myColor) {
-    const { x, y } = game.pendingShot;
+  if (game.currentStep === 2 && myPlayer?.pos && game.myColor) {
     const tankColor = game.myColor;
     const { x: tankX, y: tankY } = myPlayer.pos;
+    const silenced = !!myEffects.silenceShot;
 
     return (
       <div style={{ background: 'var(--bg3)', border: '1px solid var(--accent)', padding: 14, marginBottom: 8 }}>
@@ -55,17 +93,34 @@ function StepContent({ state, actions }) {
         <div style={{ display: 'flex', gap: 16 }}>
           <div style={{ flex: 1 }}>
             <div className="muted" style={{ fontSize: 10, letterSpacing: 2, marginBottom: 4 }}>SEU TANQUE</div>
-            <div style={{ fontFamily: 'Orbitron, monospace', fontSize: 22, color: CVARS[tankColor], letterSpacing: 4 }}>
-              {coordLabel(tankX, tankY)}
-            </div>
+            {silenced ? (
+              <div style={{ fontFamily: 'Orbitron, monospace', fontSize: 16, color: 'var(--muted)', letterSpacing: 2 }}>
+                🤫 OCULTO
+              </div>
+            ) : (
+              <div style={{ fontFamily: 'Orbitron, monospace', fontSize: 22, color: CVARS[tankColor], letterSpacing: 4 }}>
+                {coordLabel(tankX, tankY)}
+              </div>
+            )}
           </div>
 
-          <div style={{ flex: 1 }}>
-            <div className="muted" style={{ fontSize: 10, letterSpacing: 2, marginBottom: 4 }}>ALVO DO TIRO</div>
-            <div style={{ fontFamily: 'Orbitron, monospace', fontSize: 22, color: 'var(--accent)', letterSpacing: 4 }}>
-              {coordLabel(x, y)}
+          {game.pendingShot && (
+            <div style={{ flex: 1 }}>
+              <div className="muted" style={{ fontSize: 10, letterSpacing: 2, marginBottom: 4 }}>ALVO DO TIRO</div>
+              <div style={{ fontFamily: 'Orbitron, monospace', fontSize: 22, color: 'var(--accent)', letterSpacing: 4 }}>
+                {coordLabel(game.pendingShot.x, game.pendingShot.y)}
+              </div>
             </div>
-          </div>
+          )}
+
+          {game.pendingShot2 && (
+            <div style={{ flex: 1 }}>
+              <div className="muted" style={{ fontSize: 10, letterSpacing: 2, marginBottom: 4 }}>2º ALVO</div>
+              <div style={{ fontFamily: 'Orbitron, monospace', fontSize: 22, color: 'var(--accent)', letterSpacing: 4 }}>
+                {coordLabel(game.pendingShot2.x, game.pendingShot2.y)}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -74,7 +129,9 @@ function StepContent({ state, actions }) {
   if (game.currentStep === 3) {
     return (
       <>
-        <div className="muted" style={{ marginBottom: 8 }}>PASSO 3 · TOQUE PARA ONDE MOVER SEU TANQUE</div>
+        <div className="muted" style={{ marginBottom: 8 }}>
+          PASSO 3 · {myEffects.jump ? '⚡ SALTO — TOQUE QUALQUER CÉLULA' : 'TOQUE PARA ONDE MOVER SEU TANQUE'}
+        </div>
         {turnDone && (
           <div className="turn-done">
             <div className="turn-done-title">TURNO CONCLUIDO</div>
@@ -88,9 +145,11 @@ function StepContent({ state, actions }) {
 }
 
 export function GameScreen({ active, state, actions }) {
-  const { game, timerValue, myPlayer, CVARS, NAMES, turnBadge, turnDone, turnDuration } = state;
+  const { game, timerValue, myPlayer, CVARS, NAMES, turnBadge, turnDone, turnDuration, skillUsedThisRound } = state;
   const timerUrgent = timerValue <= 10;
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
+  const jumpMode = !!(myPlayer?.activeEffects?.jump) && game.currentStep === 3 && !turnDone;
 
   return (
     <div className={`screen ${active ? 'active' : ''}`}>
@@ -125,6 +184,7 @@ export function GameScreen({ active, state, actions }) {
       </div>
 
       <div style={{ width: '100%', maxWidth: 380 }}>
+        <ActiveEffects myPlayer={myPlayer} />
         <StepContent state={state} actions={actions} />
       </div>
 
@@ -136,6 +196,7 @@ export function GameScreen({ active, state, actions }) {
         mode={game.currentStep === 3 && !turnDone ? 'move' : 'view'}
         onMove={actions.moveMyTank}
         colorVar={CVARS[game.myColor]}
+        jumpMode={jumpMode}
       />
 
       <div className="gap-s" />
@@ -153,6 +214,29 @@ export function GameScreen({ active, state, actions }) {
         <button type="button" className="btn btn-ghost" onClick={actions.advanceTurn}>
           <span>FINALIZAR TURNO</span>
         </button>
+      )}
+
+      {!skillUsedThisRound && (
+        <div style={{ marginTop: 12 }}>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            style={{ fontSize: 12, borderColor: 'var(--green)', color: 'var(--green)' }}
+            onClick={() => setShowScanner(true)}
+          >
+            <span>🎴 LER CARTA DE SKILL</span>
+          </button>
+        </div>
+      )}
+
+      {showScanner && (
+        <QRScanner
+          onScan={(skillId) => {
+            setShowScanner(false);
+            actions.activateSkill(skillId);
+          }}
+          onClose={() => setShowScanner(false)}
+        />
       )}
 
       <div className="leave-bottom">

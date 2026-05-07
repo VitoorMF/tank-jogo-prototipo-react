@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { BOARD_SIZE, COLOR_ZONES, LETTERS } from '../constants/game';
 
-export function ArenaGrid({ myColor, myPos, shotCells, mode = 'view', onMove, colorVar }) {
+export function ArenaGrid({ myColor, myPos, shotCells, mode = 'view', onMove, colorVar, jumpMode = false }) {
   const zone = COLOR_ZONES[myColor];
   const useZoneOnly = !!zone;
   const visibleCols = useMemo(() => {
@@ -34,11 +34,11 @@ export function ArenaGrid({ myColor, myPos, shotCells, mode = 'view', onMove, co
       const dy = Math.abs(row - (myPos?.y || 0));
       const insideMyZone =
         zone && col >= zone.minX && col <= zone.maxX && row >= zone.minY && row <= zone.maxY;
+      const adjacentOrJump = jumpMode ? true : dx <= 1 && dy <= 1;
       const movable =
         mode === 'move' &&
         !isShot &&
-        dx <= 1 &&
-        dy <= 1 &&
+        adjacentOrJump &&
         !(dx === 0 && dy === 0) &&
         insideMyZone &&
         typeof onMove === 'function';

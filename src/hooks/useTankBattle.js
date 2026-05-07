@@ -5,6 +5,7 @@ import {
   CVARS,
   EMOJI,
   NAMES,
+  SKILLS,
   cloneBoardShots,
   clonePlayers,
   coordKey,
@@ -36,6 +37,8 @@ const initialGame = {
   winner: null,
   currentStep: 0,
   pendingShot: null,
+  pendingShot2: null,
+  doubleshotFired: false,
   shotCol: '',
   shotRow: '',
   myShots: 0,
@@ -71,7 +74,8 @@ export function useTankBattle() {
   const [timerValue, setTimerValue] = useState(TURN_DURATION_SECONDS);
   const [notif, setNotif] = useState({ show: false, msg: '', type: 'info' });
   const [online, setOnline] = useState(false);
-  const [overlays, setOverlays] = useState({ hit: false, elim: false, elimAnnounce: null });
+  const [overlays, setOverlays] = useState({ hit: false, elim: false, elimAnnounce: null, viewLives: false, skillActivated: null });
+  const [skillUsedThisRound, setSkillUsedThisRound] = useState(false);
   const [turnDone, setTurnDone] = useState(false);
 
   const gameRef = useRef(game);
@@ -81,6 +85,7 @@ export function useTankBattle() {
   const wasElimRef = useRef(false);
   const prevEliminatedRef = useRef(new Set());
   const intentionalLeaveRef = useRef(false);
+  const pendingSkillRef = useRef(new URLSearchParams(window.location.search).get('skill') || null);
 
   useEffect(() => {
     gameRef.current = game;
@@ -189,6 +194,8 @@ export function useTankBattle() {
       roundSnapshot: nextRound > g.round ? clonePlayers(nextPlayers) : g.roundSnapshot,
       currentStep: 0,
       pendingShot: null,
+      pendingShot2: null,
+      doubleshotFired: false,
       shotCol: '',
       shotRow: '',
       gameOver: alive.length <= 1,
@@ -224,11 +231,14 @@ export function useTankBattle() {
     const g = gameRef.current;
     prevLivesRef.current = g.players[g.myColor]?.lives || 3;
 
+    setSkillUsedThisRound(false);
     setTurnDone(false);
     setGame((prev) => ({
       ...prev,
       currentStep: 1,
       pendingShot: null,
+      pendingShot2: null,
+      doubleshotFired: false,
       shotCol: '',
       shotRow: '',
     }));
@@ -449,7 +459,8 @@ export function useTankBattle() {
     setScreen('home');
     setJoinCode('');
     setTimerValue(TURN_DURATION_SECONDS);
-    setOverlays({ hit: false, elim: false, elimAnnounce: null });
+    setOverlays({ hit: false, elim: false, elimAnnounce: null, viewLives: false, skillActivated: null });
+    setSkillUsedThisRound(false);
     setTurnDone(false);
   }, [clearSession, push, stopTimer]);
 
@@ -506,45 +517,6 @@ export function useTankBattle() {
     [showNotif],
   );
 
-  const fireShot = useCallback(async (x, y) => {
-    const g = gameRef.current;
-    const players = clonePlayers(g.players);
-    const boardShots = cloneBoardShots(g.boardShots);
-    let turnOrder = [...g.turnOrder];
-
-    const hitColor = turnOrder.find((playerColor) => {
-      if (playerColor === g.myColor) return false;
-      const p = players[playerColor];
-      return p && !p.eliminated && p.pos?.x === x && p.pos?.y === y;
-    });
-
-    let eliminationOrder = [...g.eliminationOrder];
-    if (hitColor) {
-      const hitResult = applyHit(hitColor, players, turnOrder);
-      turnOrder = hitResult.turnOrder;
-      if (players[hitColor].eliminated) {
-        players[hitColor].killedBy = g.myColor;
-        eliminationOrder = [...eliminationOrder, hitColor];
-      }
-    }
-
-    boardShots.push({ x, y, by: g.myColor, targetColor: hitColor || null, round: g.round });
-
-    const nextGame = {
-      ...g,
-      players,
-      boardShots,
-      turnOrder,
-      eliminationOrder,
-      myShots: g.myShots + 1,
-      pendingShot: { x, y },
-      currentStep: 2,
-    };
-
-    setGame(nextGame);
-    await push(nextGame);
-  }, [applyHit, push]);
-
   const stageShotFromInput = useCallback(async () => {
     const g = gameRef.current;
 
@@ -554,29 +526,117 @@ export function useTankBattle() {
       return;
     }
 
-    const alreadyShot = g.boardShots.some((shot) => coordKey(shot.x, shot.y) === coordKey(parsed.x, parsed.y));
+    const { x, y } = parsed;
+    const key = coordKey(x, y);
+    const myEffects = g.players[g.myColor]?.activeEffects || {};
+    const isDoubleShot = !!myEffects.doubleShot;
+    const isSecondShot = isDoubleShot && g.doubleshotFired;
+
+    const alreadyShot =
+      g.boardShots.some((s) => coordKey(s.x, s.y) === key) ||
+      (g.pendingShot && coordKey(g.pendingShot.x, g.pendingShot.y) === key);
     if (alreadyShot) {
       showNotif('Essa coordenada já recebeu alvo.', 'miss');
       return;
     }
 
-    await fireShot(parsed.x, parsed.y);
-  }, [fireShot, showNotif]);
+    const players = clonePlayers(g.players);
+    const boardShots = cloneBoardShots(g.boardShots);
+    let turnOrder = [...g.turnOrder];
+    let eliminationOrder = [...g.eliminationOrder];
+
+    const hitColor = turnOrder.find((c) => {
+      if (c === g.myColor) return false;
+      const p = players[c];
+      return p && !p.eliminated && p.pos?.x === x && p.pos?.y === y;
+    });
+
+    if (hitColor) {
+      if (players[hitColor].activeEffects?.shield) {
+        players[hitColor].activeEffects = { ...players[hitColor].activeEffects, shield: false };
+        showNotif(`🛡️ ESCUDO de ${NAMES[hitColor]} absorveu!`, 'info');
+      } else {
+        const result = applyHit(hitColor, players, turnOrder);
+        turnOrder = result.turnOrder;
+        if (players[hitColor].eliminated) {
+          players[hitColor].killedBy = g.myColor;
+          eliminationOrder = [...eliminationOrder, hitColor];
+        }
+      }
+    }
+
+    boardShots.push({ x, y, by: g.myColor, targetColor: hitColor || null, round: g.round });
+
+    if (isDoubleShot && !isSecondShot) {
+      const nextGame = {
+        ...g,
+        players,
+        boardShots,
+        turnOrder,
+        eliminationOrder,
+        myShots: g.myShots + 1,
+        pendingShot: { x, y },
+        doubleshotFired: true,
+        shotCol: '',
+        shotRow: '',
+        currentStep: 1,
+      };
+      setGame(nextGame);
+      await push(nextGame);
+      showNotif('🎯 1º TIRO! Dispare o 2º.', 'info');
+      return;
+    }
+
+    if (isSecondShot) {
+      players[g.myColor].activeEffects = { ...players[g.myColor].activeEffects, doubleShot: false };
+    }
+
+    const nextGame = {
+      ...g,
+      players,
+      boardShots,
+      turnOrder,
+      eliminationOrder,
+      myShots: g.myShots + 1,
+      pendingShot: isSecondShot ? g.pendingShot : { x, y },
+      pendingShot2: isSecondShot ? { x, y } : null,
+      doubleshotFired: false,
+      shotCol: '',
+      shotRow: '',
+      currentStep: 2,
+    };
+    setGame(nextGame);
+    await push(nextGame);
+  }, [applyHit, push, showNotif]);
 
   const proceedToMove = useCallback(() => {
+    const g = gameRef.current;
+    const players = clonePlayers(g.players);
+    if (players[g.myColor]?.activeEffects?.silenceShot) {
+      players[g.myColor].activeEffects = { ...players[g.myColor].activeEffects, silenceShot: false };
+      const nextGame = { ...g, players, currentStep: 3 };
+      setGame(nextGame);
+      push(nextGame);
+      return;
+    }
     setGame((prev) => ({ ...prev, currentStep: 3 }));
-  }, []);
+  }, [push]);
 
   const moveMyTank = useCallback(
     (x, y) => {
       if (turnDone) return;
-      if (!isInsideZone(gameRef.current.myColor, x, y)) {
+      const g = gameRef.current;
+      if (!isInsideZone(g.myColor, x, y)) {
         showNotif('Mova dentro da sua zona!', 'miss');
         return;
       }
+      const myEffects = g.players[g.myColor]?.activeEffects || {};
       setGame((prev) => {
         const players = clonePlayers(prev.players);
         players[prev.myColor].pos = { x, y };
+        if (myEffects.jump) {
+          players[prev.myColor].activeEffects = { ...players[prev.myColor].activeEffects, jump: false };
+        }
         return { ...prev, players };
       });
       stopTimer();
@@ -592,6 +652,80 @@ export function useTankBattle() {
   const dismissHit = useCallback(() => {
     setOverlays((o) => ({ ...o, hit: false }));
   }, []);
+
+  const dismissViewLives = useCallback(() => {
+    setOverlays((o) => ({ ...o, viewLives: false }));
+  }, []);
+
+  const dismissSkillActivated = useCallback(() => {
+    setOverlays((o) => ({ ...o, skillActivated: null }));
+  }, []);
+
+  const activateSkill = useCallback(
+    async (skillId) => {
+      const g = gameRef.current;
+      if (!g.roomCode || !g.myColor || !g.gameStarted) {
+        showNotif('Entre em uma partida ativa!', 'miss');
+        return;
+      }
+      if (skillUsedThisRound) {
+        showNotif('Já usou 1 skill nessa rodada!', 'miss');
+        return;
+      }
+      if (!SKILLS[skillId]) {
+        showNotif('Skill desconhecida!', 'miss');
+        return;
+      }
+
+      const players = clonePlayers(g.players);
+      const me = players[g.myColor];
+
+      switch (skillId) {
+        case 'repair': {
+          if (me.lives >= 3) { showNotif('Vida já está cheia!', 'miss'); return; }
+          me.lives = Math.min(3, me.lives + 1);
+          setSkillUsedThisRound(true);
+          const ng1 = { ...g, players };
+          setGame(ng1);
+          await push(ng1);
+          setOverlays((o) => ({ ...o, skillActivated: skillId }));
+          break;
+        }
+        case 'viewLives': {
+          setSkillUsedThisRound(true);
+          setOverlays((o) => ({ ...o, viewLives: true }));
+          break;
+        }
+        case 'rebuild': {
+          const myZoneShots = g.boardShots.filter((s) => isInsideZone(g.myColor, s.x, s.y));
+          if (!myZoneShots.length) { showNotif('Nenhum alvo na sua zona!', 'miss'); return; }
+          const last = myZoneShots[myZoneShots.length - 1];
+          const boardShots = g.boardShots.filter((s) => !(s.x === last.x && s.y === last.y));
+          setSkillUsedThisRound(true);
+          const ng2 = { ...g, boardShots };
+          setGame(ng2);
+          await push(ng2);
+          setOverlays((o) => ({ ...o, skillActivated: skillId }));
+          break;
+        }
+        case 'shield':
+        case 'jump':
+        case 'silenceShot':
+        case 'doubleShot': {
+          me.activeEffects = { ...(me.activeEffects || {}), [skillId]: true };
+          setSkillUsedThisRound(true);
+          const ng3 = { ...g, players };
+          setGame(ng3);
+          await push(ng3);
+          setOverlays((o) => ({ ...o, skillActivated: skillId }));
+          break;
+        }
+        default:
+          showNotif('Skill desconhecida!', 'miss');
+      }
+    },
+    [push, showNotif, skillUsedThisRound],
+  );
 
   const confirmElimination = useCallback(() => {
     setOverlays((o) => ({ ...o, elim: false }));
@@ -697,6 +831,14 @@ export function useTankBattle() {
     };
   }, [clearSession, loadSession, showNotif, stopTimer, subscribe]);
 
+  useEffect(() => {
+    if (pendingSkillRef.current && game.roomCode && game.myColor && game.gameStarted) {
+      const skill = pendingSkillRef.current;
+      pendingSkillRef.current = null;
+      activateSkill(skill);
+    }
+  }, [game.roomCode, game.myColor, game.gameStarted, activateSkill]);
+
   const playersReadyCount = useMemo(() => COLORS.filter((c) => game.players[c]?.active).length, [game.players]);
 
   const canStart = playersReadyCount >= 2 && game.isHost;
@@ -741,6 +883,7 @@ export function useTankBattle() {
       online,
       overlays,
       turnDone,
+      skillUsedThisRound,
       canStart,
       playersReadyCount,
       myPlayer,
@@ -756,6 +899,7 @@ export function useTankBattle() {
       CHEX,
       EMOJI,
       COLORS,
+      SKILLS,
     },
     actions: {
       setScreen: setScreenSafely,
@@ -772,6 +916,9 @@ export function useTankBattle() {
       proceedToMove,
       moveMyTank,
       dismissHit,
+      dismissViewLives,
+      dismissSkillActivated,
+      activateSkill,
       confirmElimination,
       dismissEliminationAnnounce,
       advanceTurn,

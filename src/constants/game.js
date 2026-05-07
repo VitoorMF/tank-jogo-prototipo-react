@@ -50,11 +50,21 @@ const randInZone = (zone) => ({
   y: zone.minY + Math.floor(Math.random() * (zone.maxY - zone.minY + 1)),
 });
 
+export const SKILLS = {
+  repair:      { id: 'repair',      name: 'REPARO',          emoji: '🔧', desc: '+1 vida (máx 3)',                        instant: true  },
+  viewLives:   { id: 'viewLives',   name: 'ESPIONAGEM',      emoji: '👁️', desc: 'Ver vidas de todos agora',               instant: true  },
+  rebuild:     { id: 'rebuild',     name: 'RECONSTRUIR',     emoji: '🔩', desc: 'Remove último alvo da sua zona',         instant: true  },
+  shield:      { id: 'shield',      name: 'ESCUDO',          emoji: '🛡️', desc: 'Absorve próximo tiro recebido',          instant: false },
+  jump:        { id: 'jump',        name: 'SALTO',           emoji: '⚡', desc: 'Move para qualquer célula da zona',      instant: false },
+  silenceShot: { id: 'silenceShot', name: 'TIRO SILENCIOSO', emoji: '🤫', desc: 'Oculta seu tanque no passo 2',           instant: false },
+  doubleShot:  { id: 'doubleShot',  name: 'TIRO DUPLO',      emoji: '🎯', desc: 'Dispara duas coordenadas no seu turno',  instant: false },
+};
+
 export const mkPlayers = () => ({
-  yellow: { lives: 3, pos: randInZone(COLOR_ZONES.yellow), active: false, eliminated: false, killedBy: null, name: '' },
-  red: { lives: 3, pos: randInZone(COLOR_ZONES.red), active: false, eliminated: false, killedBy: null, name: '' },
-  blue: { lives: 3, pos: randInZone(COLOR_ZONES.blue), active: false, eliminated: false, killedBy: null, name: '' },
-  verde: { lives: 3, pos: randInZone(COLOR_ZONES.verde), active: false, eliminated: false, killedBy: null, name: '' },
+  yellow: { lives: 3, pos: randInZone(COLOR_ZONES.yellow), active: false, eliminated: false, killedBy: null, name: '', activeEffects: {} },
+  red:    { lives: 3, pos: randInZone(COLOR_ZONES.red),    active: false, eliminated: false, killedBy: null, name: '', activeEffects: {} },
+  blue:   { lives: 3, pos: randInZone(COLOR_ZONES.blue),   active: false, eliminated: false, killedBy: null, name: '', activeEffects: {} },
+  verde:  { lives: 3, pos: randInZone(COLOR_ZONES.verde),  active: false, eliminated: false, killedBy: null, name: '', activeEffects: {} },
 });
 
 export const mkBoardShots = () => [];
@@ -114,7 +124,9 @@ export function migrateLegacyDestroyed(legacyDestroyed) {
 }
 
 export function clonePlayers(players) {
-  return Object.fromEntries(Object.entries(players).map(([k, v]) => [k, { ...v, pos: { ...v.pos } }]));
+  return Object.fromEntries(
+    Object.entries(players).map(([k, v]) => [k, { ...v, pos: { ...v.pos }, activeEffects: { ...(v.activeEffects || {}) } }]),
+  );
 }
 
 export function cloneBoardShots(shots) {
