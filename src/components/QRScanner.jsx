@@ -19,7 +19,7 @@ function parseSkillFromQR(text) {
 
 export function QRScanner({ onScan, onClose }) {
   const [error, setError] = useState(null);
-  const [status, setStatus] = useState('starting'); // 'starting' | 'scanning' | 'error'
+  const [status, setStatus] = useState('starting');
   const qrInstanceRef = useRef(null);
 
   useEffect(() => {
@@ -27,10 +27,8 @@ export function QRScanner({ onScan, onClose }) {
     let localQr = null;
 
     const start = async () => {
-      // Pequeno delay pra garantir que o DOM está pronto e StrictMode unmount já aconteceu
       await new Promise((r) => setTimeout(r, 100));
       if (cancelled) return;
-
       const el = document.getElementById(SCANNER_ID);
       if (!el) return;
 
@@ -38,33 +36,56 @@ export function QRScanner({ onScan, onClose }) {
         localQr = new Html5Qrcode(SCANNER_ID, false);
         qrInstanceRef.current = localQr;
 
-        await localQr.start(
-          { facingMode: 'environment' },
-          {
-            fps: 10,
-            qrbox: (vw, vh) => {
-              const min = Math.min(vw, vh);
-              const size = Math.max(150, Math.floor(min * 0.75));
-              return { width: size, height: size };
+        // Tenta primeiro a câmera traseira; se falhar, usa qualquer uma disponível
+        let started = false;
+        const tryStart = async (cameraId) => {
+          await localQr.start(
+            cameraId,
+            {
+              fps: 10,
+              qrbox: (vw, vh) => {
+                const min = Math.min(vw, vh);
+                const size = Math.max(150, Math.floor(min * 0.75));
+                return { width: size, height: size };
+              },
+              aspectRatio: 1.0,
             },
-          },
-          (text) => {
-            if (cancelled) return;
-            const skillId = parseSkillFromQR(text);
-            if (skillId) {
-              cancelled = true;
-              localQr.stop().catch(() => {}).finally(() => {
-                localQr.clear().catch(() => {});
-                onScan(skillId);
-              });
-            } else {
-              setError(`QR inválido: "${text.slice(0, 40)}"`);
-            }
-          },
-          () => {}, // ignora "not found" frame errors
-        );
+            (text) => {
+              if (cancelled) return;
+              const skillId = parseSkillFromQR(text);
+              if (skillId) {
+                cancelled = true;
+                localQr.stop().catch(() => {}).finally(() => {
+                  localQr.clear().catch(() => {});
+                  onScan(skillId);
+                });
+              } else {
+                setError(`QR inválido: "${text.slice(0, 40)}"`);
+              }
+            },
+            () => {},
+          );
+        };
 
-        if (cancelled) {
+        try {
+          await tryStart({ facingMode: 'environment' });
+          started = true;
+        } catch (e1) {
+          if (cancelled) return;
+          console.log('[QR] environment falhou, tentando enumerar:', e1?.message);
+          try {
+            const cameras = await Html5Qrcode.getCameras();
+            if (!cameras || cameras.length === 0) throw new Error('Nenhuma câmera disponível');
+            const back = cameras.find((c) => /back|rear|environment|traseira/i.test(c.label));
+            const cam = back || cameras[cameras.length - 1];
+            await tryStart(cam.id);
+            started = true;
+          } catch (e2) {
+            throw e2;
+          }
+        }
+
+        if (!started || cancelled) {
           await localQr.stop().catch(() => {});
           await localQr.clear().catch(() => {});
           return;
@@ -73,11 +94,15 @@ export function QRScanner({ onScan, onClose }) {
         setStatus('scanning');
       } catch (err) {
         if (cancelled) return;
+        console.log('[QR] erro final:', err?.name, err?.message);
+        const n = err?.name || '';
         const msg = (err?.message || String(err)).toLowerCase();
-        if (msg.includes('permission') || msg.includes('notallowed') || msg.includes('denied')) {
-          setError('Permissão de câmera negada. Habilite nas configurações do navegador.');
-        } else if (msg.includes('notfound') || msg.includes('no camera')) {
+        if (n === 'NotAllowedError' || msg.includes('permission') || msg.includes('notallowed')) {
+          setError('Permissão de câmera negada. Habilite no navegador.');
+        } else if (n === 'NotFoundError' || msg.includes('notfound') || msg.includes('no camera')) {
           setError('Nenhuma câmera encontrada neste dispositivo.');
+        } else if (n === 'NotReadableError') {
+          setError('Câmera está em uso por outro aplicativo.');
         } else if (msg.includes('secure context') || msg.includes('https')) {
           setError('Câmera só funciona em HTTPS ou localhost.');
         } else {
@@ -129,6 +154,15 @@ export function QRScanner({ onScan, onClose }) {
         gap: 16, padding: 24,
       }}
     >
+      <style>{`
+        #${SCANNER_ID} video {
+          width: 100% !important;
+          height: 100% !important;
+          object-fit: cover !important;
+          display: block !important;
+        }
+      `}</style>
+
       <div style={{ fontFamily: 'Orbitron, monospace', fontSize: 13, color: 'var(--accent)', letterSpacing: 2 }}>
         🎴 ESCANEAR CARTA DE SKILL
       </div>
