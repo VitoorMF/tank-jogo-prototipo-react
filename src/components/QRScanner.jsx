@@ -17,97 +17,124 @@ function parseSkillFromQR(text) {
   return null;
 }
 
+function describeError(err) {
+  const n = err?.name || '';
+  const msg = (err?.message || String(err)).toLowerCase();
+  if (n === 'NotAllowedError' || msg.includes('permission') || msg.includes('notallowed')) {
+    return 'Permissão de câmera negada. Habilite no navegador.';
+  }
+  if (n === 'NotFoundError' || msg.includes('notfound') || msg.includes('no camera')) {
+    return 'Nenhuma câmera encontrada neste dispositivo.';
+  }
+  if (n === 'NotReadableError' || msg.includes('notreadable')) {
+    return 'Câmera está em uso por outro aplicativo.';
+  }
+  if (n === 'OverconstrainedError' || msg.includes('overconstrained')) {
+    return 'Câmera não suporta a configuração pedida.';
+  }
+  if (msg.includes('secure context') || msg.includes('https')) {
+    return 'Câmera só funciona em HTTPS ou localhost.';
+  }
+  return `Erro: ${err?.name || ''} ${err?.message || err}`;
+}
+
 export function QRScanner({ onScan, onClose }) {
   const [error, setError] = useState(null);
   const [status, setStatus] = useState('starting');
+  const [debugInfo, setDebugInfo] = useState('');
   const qrInstanceRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
     let localQr = null;
 
+    const log = (...args) => {
+      console.log('[QR]', ...args);
+      setDebugInfo((prev) => prev + '\n' + args.map(String).join(' '));
+    };
+
     const start = async () => {
       await new Promise((r) => setTimeout(r, 100));
       if (cancelled) return;
       const el = document.getElementById(SCANNER_ID);
-      if (!el) return;
+      if (!el) { log('container missing'); return; }
+
+      // 1. Preflight: solicita permissão e enumera câmeras
+      let cameraId = null;
+      try {
+        log('preflight getUserMedia...');
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        stream.getTracks().forEach((t) => t.stop());
+        log('permission OK');
+      } catch (permErr) {
+        if (cancelled) return;
+        log('preflight failed:', permErr.name, permErr.message);
+        setError(describeError(permErr));
+        setStatus('error');
+        return;
+      }
+
+      try {
+        const cameras = await Html5Qrcode.getCameras();
+        log('cameras found:', cameras?.length || 0);
+        if (!cameras || cameras.length === 0) {
+          throw new Error('Nenhuma câmera disponível');
+        }
+        const back = cameras.find((c) => /back|rear|environment|traseira/i.test(c.label || ''));
+        cameraId = back ? back.id : cameras[cameras.length - 1].id;
+        log('chose camera:', cameraId, '(label:', back?.label || cameras[cameras.length - 1].label, ')');
+      } catch (enumErr) {
+        if (cancelled) return;
+        log('enum failed:', enumErr.message);
+        // Fallback: usa facingMode loose
+        cameraId = { facingMode: 'environment' };
+      }
+
+      if (cancelled) return;
 
       try {
         localQr = new Html5Qrcode(SCANNER_ID, false);
         qrInstanceRef.current = localQr;
 
-        // Tenta primeiro a câmera traseira; se falhar, usa qualquer uma disponível
-        let started = false;
-        const tryStart = async (cameraId) => {
-          await localQr.start(
-            cameraId,
-            {
-              fps: 10,
-              qrbox: (vw, vh) => {
-                const min = Math.min(vw, vh);
-                const size = Math.max(150, Math.floor(min * 0.75));
-                return { width: size, height: size };
-              },
-              aspectRatio: 1.0,
+        await localQr.start(
+          cameraId,
+          {
+            fps: 10,
+            qrbox: (vw, vh) => {
+              const min = Math.min(vw, vh);
+              const size = Math.max(150, Math.floor(min * 0.75));
+              return { width: size, height: size };
             },
-            (text) => {
-              if (cancelled) return;
-              const skillId = parseSkillFromQR(text);
-              if (skillId) {
-                cancelled = true;
-                localQr.stop().catch(() => {}).finally(() => {
-                  localQr.clear().catch(() => {});
-                  onScan(skillId);
-                });
-              } else {
-                setError(`QR inválido: "${text.slice(0, 40)}"`);
-              }
-            },
-            () => {},
-          );
-        };
+            aspectRatio: 1.0,
+          },
+          (text) => {
+            if (cancelled) return;
+            const skillId = parseSkillFromQR(text);
+            if (skillId) {
+              cancelled = true;
+              localQr.stop().catch(() => {}).finally(() => {
+                localQr.clear().catch(() => {});
+                onScan(skillId);
+              });
+            } else {
+              setError(`QR inválido: "${text.slice(0, 40)}"`);
+            }
+          },
+          () => {},
+        );
 
-        try {
-          await tryStart({ facingMode: 'environment' });
-          started = true;
-        } catch (e1) {
-          if (cancelled) return;
-          console.log('[QR] environment falhou, tentando enumerar:', e1?.message);
-          try {
-            const cameras = await Html5Qrcode.getCameras();
-            if (!cameras || cameras.length === 0) throw new Error('Nenhuma câmera disponível');
-            const back = cameras.find((c) => /back|rear|environment|traseira/i.test(c.label));
-            const cam = back || cameras[cameras.length - 1];
-            await tryStart(cam.id);
-            started = true;
-          } catch (e2) {
-            throw e2;
-          }
-        }
-
-        if (!started || cancelled) {
+        if (cancelled) {
           await localQr.stop().catch(() => {});
           await localQr.clear().catch(() => {});
           return;
         }
 
+        log('scanner running');
         setStatus('scanning');
-      } catch (err) {
+      } catch (startErr) {
         if (cancelled) return;
-        console.log('[QR] erro final:', err?.name, err?.message);
-        const n = err?.name || '';
-        const msg = (err?.message || String(err)).toLowerCase();
-        if (n === 'NotAllowedError' || msg.includes('permission') || msg.includes('notallowed')) {
-          setError('Permissão de câmera negada. Habilite no navegador.');
-        } else if (n === 'NotFoundError' || msg.includes('notfound') || msg.includes('no camera')) {
-          setError('Nenhuma câmera encontrada neste dispositivo.');
-        } else if (n === 'NotReadableError') {
-          setError('Câmera está em uso por outro aplicativo.');
-        } else if (msg.includes('secure context') || msg.includes('https')) {
-          setError('Câmera só funciona em HTTPS ou localhost.');
-        } else {
-          setError(`Erro: ${err?.message || err}`);
-        }
+        log('start failed:', startErr.name, startErr.message);
+        setError(describeError(startErr));
         setStatus('error');
       }
     };
@@ -168,7 +195,6 @@ export function QRScanner({ onScan, onClose }) {
       </div>
 
       <div
-        id={SCANNER_ID}
         style={{
           width: 'min(280px, 80vw)',
           height: 'min(280px, 80vw)',
@@ -179,11 +205,16 @@ export function QRScanner({ onScan, onClose }) {
           position: 'relative',
         }}
       >
+        {/* Container que o html5-qrcode controla — NUNCA renderize children React aqui */}
+        <div id={SCANNER_ID} style={{ width: '100%', height: '100%' }} />
+
+        {/* Loading overlay fica em camada separada, fora do controle do html5-qrcode */}
         {status === 'starting' && (
           <div style={{
-            position: 'absolute', inset: 0, zIndex: 1,
+            position: 'absolute', inset: 0, zIndex: 2,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             color: 'var(--muted)', fontSize: 12, letterSpacing: 1, pointerEvents: 'none',
+            background: '#000',
           }}>
             INICIANDO CÂMERA...
           </div>
@@ -200,6 +231,13 @@ export function QRScanner({ onScan, onClose }) {
         <div className="muted" style={{ fontSize: 11, textAlign: 'center' }}>
           Aponte para o QR code da carta
         </div>
+      )}
+
+      {status === 'error' && debugInfo && (
+        <details style={{ maxWidth: 320, color: 'var(--muted)', fontSize: 10, fontFamily: 'monospace' }}>
+          <summary style={{ cursor: 'pointer' }}>Detalhes técnicos</summary>
+          <pre style={{ whiteSpace: 'pre-wrap', textAlign: 'left', marginTop: 8 }}>{debugInfo.trim()}</pre>
+        </details>
       )}
 
       <button type="button" className="btn btn-ghost" onClick={handleClose}>
