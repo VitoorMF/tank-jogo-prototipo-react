@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Tank Battle — QR Codes das Skills</title>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@900&family=Barlow+Condensed:wght@700&display=swap');
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0a0c0f;
+      color: #fff;
+      font-family: 'Barlow Condensed', sans-serif;
+      padding: 32px;
+    }
+
+    h1 {
+      font-family: 'Orbitron', monospace;
+      color: #f0a500;
+      font-size: 20px;
+      letter-spacing: 4px;
+      text-align: center;
+      margin-bottom: 8px;
+    }
+
+    .subtitle {
+      text-align: center;
+      color: #555;
+      font-size: 13px;
+      letter-spacing: 2px;
+      margin-bottom: 32px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 24px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .card {
+      border: 2px solid;
+      border-radius: 8px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      background: #111418;
+    }
+
+    .card-emoji {
+      font-size: 32px;
+    }
+
+    .card-name {
+      font-family: 'Orbitron', monospace;
+      font-size: 13px;
+      letter-spacing: 3px;
+      text-align: center;
+    }
+
+    .card-desc {
+      font-size: 12px;
+      letter-spacing: 1px;
+      color: #aaa;
+      text-align: center;
+    }
+
+    canvas {
+      border-radius: 4px;
+      background: #fff;
+      padding: 8px;
+    }
+
+    .card-url {
+      font-size: 9px;
+      color: #444;
+      letter-spacing: 1px;
+      word-break: break-all;
+      text-align: center;
+    }
+
+    @media print {
+      body { background: #fff; padding: 16px; }
+      h1, .subtitle { color: #000; }
+      .card { background: #fff; break-inside: avoid; }
+      .card-desc { color: #555; }
+      .card-url { color: #aaa; }
+    }
+  </style>
+</head>
+<body>
+
+  <h1>TANK BATTLE</h1>
+  <p class="subtitle">CARTAS DE HABILIDADE — IMPRIMIR E RECORTAR</p>
+
+  <div class="grid" id="grid"></div>
+
+  <script>
+    const BASE_URL = 'https://tank-jogo-prototipo-react.vercel.app';
+
+    const skills = [
+      { id: 'repair',      name: 'REPARO',          emoji: '🔧', desc: '+1 vida (máx 3)',                       color: '#39ff14' },
+      { id: 'viewLives',   name: 'ESPIONAGEM',       emoji: '👁️', desc: 'Ver vidas de todos agora',              color: '#44aaff' },
+      { id: 'rebuild',     name: 'RECONSTRUIR',      emoji: '🔩', desc: 'Remove último alvo da sua zona',        color: '#f5c842' },
+      { id: 'shield',      name: 'ESCUDO',           emoji: '🛡️', desc: 'Absorve o próximo tiro recebido',       color: '#44aaff' },
+      { id: 'jump',        name: 'SALTO',            emoji: '⚡', desc: 'Move para qualquer célula da zona',     color: '#f0a500' },
+      { id: 'silenceShot', name: 'TIRO SILENCIOSO',  emoji: '🤫', desc: 'Oculta seu tanque no passo 2',          color: '#ff4455' },
+      { id: 'doubleShot',  name: 'TIRO DUPLO',       emoji: '🎯', desc: 'Dispara duas coordenadas no seu turno', color: '#ff4455' },
+    ];
+
+    const grid = document.getElementById('grid');
+
+    skills.forEach(skill => {
+      const url = `${BASE_URL}/?skill=${skill.id}`;
+
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.style.borderColor = skill.color;
+
+      card.innerHTML = `
+        <div class="card-emoji">${skill.emoji}</div>
+        <div class="card-name" style="color:${skill.color}">${skill.name}</div>
+        <div class="card-desc">${skill.desc}</div>
+        <canvas id="qr-${skill.id}"></canvas>
+        <div class="card-url">${url}</div>
+      `;
+
+      grid.appendChild(card);
+
+      QRCode.toCanvas(
+        document.getElementById(`qr-${skill.id}`),
+        url,
+        { width: 160, margin: 1, color: { dark: '#000000', light: '#ffffff' } }
+      );
+    });
+  </script>
+
+</body>
+</html>
