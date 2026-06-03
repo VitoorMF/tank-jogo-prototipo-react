@@ -216,7 +216,7 @@ export function GameScreen({ active, state, actions }) {
         </button>
       )}
 
-      {!skillUsedThisRound && (
+      {game.currentStep === 1 && !skillUsedThisRound && (
         <div style={{ marginTop: 12 }}>
           <button
             type="button"
