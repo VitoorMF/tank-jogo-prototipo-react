@@ -58,6 +58,29 @@ export function Overlays({ state, actions }) {
         </div>
       </div>
 
+      <div className={`overlay ${overlays.missileTarget ? 'show' : ''}`}>
+        <div className="overlay-box" style={{ borderColor: 'var(--accent2)' }}>
+          <div style={{ fontSize: 44 }}>🚀</div>
+          <div className="overlay-title" style={{ color: 'var(--accent2)' }}>MÍSSIL — ESCOLHA O ALVO</div>
+          <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 8, margin: '8px 0' }}>
+            {COLORS.filter((c) => c !== game.myColor && game.players[c]?.active && !game.players[c]?.eliminated).map((c) => (
+              <button
+                key={c}
+                type="button"
+                className="btn"
+                style={{ borderColor: CVARS[c], color: CVARS[c] }}
+                onClick={() => actions.fireMissile(c)}
+              >
+                <span>{game.players[c]?.name?.trim() ? game.players[c].name.toUpperCase() : NAMES[c]}</span>
+              </button>
+            ))}
+          </div>
+          <button type="button" className="btn btn-ghost" onClick={actions.cancelMissile}>
+            <span>CANCELAR</span>
+          </button>
+        </div>
+      </div>
+
       <div className={`overlay ${overlays.skillActivated ? 'show' : ''}`}>
         <div className="overlay-box" style={{ borderColor: 'var(--green)' }}>
           {overlays.skillActivated && (() => {

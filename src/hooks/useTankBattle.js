@@ -22,6 +22,7 @@ import { db } from '../services/supabase';
 const SESSION_KEY = 'tb_session';
 const NAME_KEY = 'tb_player_name';
 const TURN_DURATION_SECONDS = 90;
+const SABOTAGE_DURATION_SECONDS = 45;
 
 const initialGame = {
   myColor: null,
@@ -44,6 +45,7 @@ const initialGame = {
   myShots: 0,
   roundSnapshot: null,
   eliminationOrder: [],
+  sabotagedColor: null,
 };
 
 function normalizeSharedState(state) {
@@ -63,6 +65,7 @@ function normalizeSharedState(state) {
     winner: state?.winner || null,
     roundSnapshot: state?.roundSnapshot || null,
     eliminationOrder: state?.eliminationOrder || [],
+    sabotagedColor: state?.sabotagedColor || null,
   };
 }
 
@@ -72,9 +75,10 @@ export function useTankBattle() {
   const [joinCode, setJoinCode] = useState('');
   const [myName, setMyNameState] = useState(() => localStorage.getItem(NAME_KEY) || '');
   const [timerValue, setTimerValue] = useState(TURN_DURATION_SECONDS);
+  const [effectiveTurnDuration, setEffectiveTurnDuration] = useState(TURN_DURATION_SECONDS);
   const [notif, setNotif] = useState({ show: false, msg: '', type: 'info' });
   const [online, setOnline] = useState(false);
-  const [overlays, setOverlays] = useState({ hit: false, elim: false, elimAnnounce: null, viewLives: false, skillActivated: null });
+  const [overlays, setOverlays] = useState({ hit: false, elim: false, elimAnnounce: null, viewLives: false, skillActivated: null, missileTarget: false });
   const [skillUsedThisRound, setSkillUsedThisRound] = useState(false);
   const [turnDone, setTurnDone] = useState(false);
 
@@ -140,6 +144,7 @@ export function useTankBattle() {
       winner: g.winner,
       roundSnapshot: g.roundSnapshot,
       eliminationOrder: g.eliminationOrder,
+      sabotagedColor: g.sabotagedColor,
     };
   }, []);
 
@@ -210,9 +215,10 @@ export function useTankBattle() {
     setTimerValue(nextValue);
   }, []);
 
-  const startTimer = useCallback(() => {
+  const startTimer = useCallback((duration = TURN_DURATION_SECONDS) => {
     stopTimer();
-    let value = TURN_DURATION_SECONDS;
+    let value = duration;
+    setEffectiveTurnDuration(duration);
     tickTimer(value);
 
     timerRef.current = window.setInterval(() => {
@@ -231,21 +237,32 @@ export function useTankBattle() {
     const g = gameRef.current;
     prevLivesRef.current = g.players[g.myColor]?.lives || 3;
 
+    const sabotaged = g.sabotagedColor === g.myColor;
+    const duration = sabotaged ? SABOTAGE_DURATION_SECONDS : TURN_DURATION_SECONDS;
+
     setSkillUsedThisRound(false);
     setTurnDone(false);
-    setGame((prev) => ({
-      ...prev,
+
+    const nextGame = {
+      ...g,
       currentStep: 1,
       pendingShot: null,
       pendingShot2: null,
       doubleshotFired: false,
       shotCol: '',
       shotRow: '',
-    }));
+      sabotagedColor: sabotaged ? null : g.sabotagedColor,
+    };
+    setGame(nextGame);
+
+    if (sabotaged) {
+      showNotif('⏱️ TURNO SABOTADO! Apenas 45s', 'miss');
+      push(nextGame);
+    }
 
     setScreenSafely('game');
-    startTimer();
-  }, [setScreenSafely, startTimer]);
+    startTimer(duration);
+  }, [push, setScreenSafely, showNotif, startTimer]);
 
   const showWaiting = useCallback(() => {
     stopTimer();
@@ -459,7 +476,7 @@ export function useTankBattle() {
     setScreen('home');
     setJoinCode('');
     setTimerValue(TURN_DURATION_SECONDS);
-    setOverlays({ hit: false, elim: false, elimAnnounce: null, viewLives: false, skillActivated: null });
+    setOverlays({ hit: false, elim: false, elimAnnounce: null, viewLives: false, skillActivated: null, missileTarget: false });
     setSkillUsedThisRound(false);
     setTurnDone(false);
   }, [clearSession, push, stopTimer]);
@@ -649,6 +666,59 @@ export function useTankBattle() {
     setOverlays((o) => ({ ...o, elimAnnounce: null }));
   }, []);
 
+  const cancelMissile = useCallback(() => {
+    setOverlays((o) => ({ ...o, missileTarget: false }));
+  }, []);
+
+  const fireMissile = useCallback(
+    async (targetColor) => {
+      const g = gameRef.current;
+      const players = clonePlayers(g.players);
+      const target = players[targetColor];
+      if (!target || target.eliminated) {
+        showNotif('Alvo inválido!', 'miss');
+        setOverlays((o) => ({ ...o, missileTarget: false }));
+        return;
+      }
+
+      let turnOrder = [...g.turnOrder];
+      let eliminationOrder = [...g.eliminationOrder];
+
+      if (target.activeEffects?.shield) {
+        target.activeEffects = { ...target.activeEffects, shield: false };
+        showNotif(`🛡️ ESCUDO de ${NAMES[targetColor]} absorveu o míssil!`, 'info');
+      } else {
+        target.lives -= 1;
+        if (target.lives <= 0) {
+          target.lives = 0;
+          target.eliminated = true;
+          target.killedBy = g.myColor;
+          turnOrder = turnOrder.filter((c) => c !== targetColor);
+          eliminationOrder = [...eliminationOrder, targetColor];
+          showNotif(`💀 ${NAMES[targetColor]} ELIMINADO pelo míssil!`, 'info');
+        } else {
+          showNotif(`🚀 Míssil atingiu ${NAMES[targetColor]}!`, 'info');
+        }
+      }
+
+      const alive = turnOrder.filter((c) => !players[c].eliminated);
+
+      setSkillUsedThisRound(true);
+      const ng = {
+        ...g,
+        players,
+        turnOrder,
+        eliminationOrder,
+        gameOver: alive.length <= 1,
+        winner: alive.length <= 1 ? alive[0] || null : null,
+      };
+      setGame(ng);
+      await push(ng);
+      setOverlays((o) => ({ ...o, missileTarget: false, skillActivated: 'missile' }));
+    },
+    [push, showNotif],
+  );
+
   const dismissHit = useCallback(() => {
     setOverlays((o) => ({ ...o, hit: false }));
   }, []);
@@ -696,6 +766,13 @@ export function useTankBattle() {
           setOverlays((o) => ({ ...o, viewLives: true }));
           break;
         }
+        case 'missile': {
+          const targets = (g.turnOrder || []).filter((c) => c !== g.myColor && !players[c]?.eliminated);
+          if (!targets.length) { showNotif('Nenhum alvo disponível!', 'miss'); return; }
+          // Não marca como usada aqui: só confirma quando escolher o alvo (fireMissile).
+          setOverlays((o) => ({ ...o, missileTarget: true }));
+          break;
+        }
         case 'rebuild': {
           const myZoneShots = g.boardShots.filter((s) => isInsideZone(g.myColor, s.x, s.y));
           if (!myZoneShots.length) { showNotif('Nenhum alvo na sua zona!', 'miss'); return; }
@@ -705,6 +782,18 @@ export function useTankBattle() {
           const ng2 = { ...g, boardShots };
           setGame(ng2);
           await push(ng2);
+          setOverlays((o) => ({ ...o, skillActivated: skillId }));
+          break;
+        }
+        case 'sabotage': {
+          const order = g.turnOrder || [];
+          if (order.length < 2) { showNotif('Sem alvo para sabotar!', 'miss'); return; }
+          const nextColor = order[(g.currentTurnIdx + 1) % order.length];
+          if (!nextColor || nextColor === g.myColor) { showNotif('Sem alvo para sabotar!', 'miss'); return; }
+          setSkillUsedThisRound(true);
+          const ngS = { ...g, sabotagedColor: nextColor };
+          setGame(ngS);
+          await push(ngS);
           setOverlays((o) => ({ ...o, skillActivated: skillId }));
           break;
         }
@@ -845,7 +934,10 @@ export function useTankBattle() {
   const myPlayer = game.myColor ? game.players[game.myColor] : null;
   const activeTurnColor = currentPlayer(game);
 
-  const waitingMsg = activeTurnColor ? `VEZ DO ${NAMES[activeTurnColor]}` : 'AGUARDANDO...';
+  const activeTurnName = activeTurnColor
+    ? (game.players[activeTurnColor]?.name?.trim() || NAMES[activeTurnColor])
+    : '';
+  const waitingMsg = activeTurnColor ? `VEZ DE ${activeTurnName.toUpperCase()}` : 'AGUARDANDO...';
 
   const endStats = useMemo(() => {
     const myHits = game.boardShots.filter((s) => s.by === game.myColor && s.targetColor !== null).length;
@@ -893,7 +985,7 @@ export function useTankBattle() {
       turnBadge,
       hearts: myPlayer ? hearts(myPlayer.lives) : '❤️❤️❤️',
       coordLabel,
-      turnDuration: TURN_DURATION_SECONDS,
+      turnDuration: effectiveTurnDuration,
       NAMES,
       CVARS,
       CHEX,
@@ -919,6 +1011,8 @@ export function useTankBattle() {
       dismissViewLives,
       dismissSkillActivated,
       activateSkill,
+      fireMissile,
+      cancelMissile,
       confirmElimination,
       dismissEliminationAnnounce,
       advanceTurn,

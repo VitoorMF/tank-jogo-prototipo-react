@@ -58,6 +58,8 @@ export const SKILLS = {
   jump:        { id: 'jump',        name: 'SALTO',           emoji: '⚡', desc: 'Move para qualquer célula da zona',      instant: false },
   silenceShot: { id: 'silenceShot', name: 'TIRO SILENCIOSO', emoji: '🤫', desc: 'Oculta seu tanque no passo 2',           instant: false },
   doubleShot:  { id: 'doubleShot',  name: 'TIRO DUPLO',      emoji: '🎯', desc: 'Dispara duas coordenadas no seu turno',  instant: false },
+  sabotage:    { id: 'sabotage',    name: 'SABOTAGEM',       emoji: '⏱️', desc: 'Próximo jogador só tem 45s de turno',     instant: false },
+  missile:     { id: 'missile',     name: 'MÍSSIL',          emoji: '🚀', desc: 'Tira 1 vida de um jogador à sua escolha', instant: true  },
 };
 
 export const mkPlayers = () => ({
