@@ -112,10 +112,12 @@ export function QRScanner({ onScan, onClose }) {
             const skillId = parseSkillFromQR(text);
             if (skillId) {
               cancelled = true;
-              localQr.stop().catch(() => {}).finally(() => {
-                localQr.clear().catch(() => {});
-                onScan(skillId);
-              });
+              // Ativa a skill IMEDIATAMENTE. Não esperamos o stop() resolver
+              // porque no mobile (iOS Safari) ele às vezes trava sem resolver,
+              // o que deixava a câmera preta e a skill nunca ativava.
+              // O stop()/clear() da câmera roda no cleanup do useEffect quando
+              // o componente desmonta (onScan dispara setShowScanner(false)).
+              onScan(skillId);
             } else {
               setError(`QR inválido: "${text.slice(0, 40)}"`);
             }
