@@ -30,6 +30,24 @@ export function Overlays({ state, actions }) {
         </div>
       </div>
 
+      {/* Escudo absorveu (privado, só o escudado vê) */}
+      <div className={`overlay ${overlays.shieldAbsorbed ? 'show' : ''}`}>
+        <div className="overlay-box" style={{ borderColor: 'var(--green)' }}>
+          <div className="overlay-big">🛡️</div>
+          <div className="overlay-title" style={{ color: 'var(--green)' }}>
+            Escudo absorveu!
+          </div>
+          <div style={{ color: 'var(--ink-2)', fontSize: 12, lineHeight: 1.7 }}>
+            Você levou um tiro, mas o escudo segurou.
+            <br />
+            Ninguém mais viu isso.
+          </div>
+          <button type="button" className="btn btn--primary" onClick={actions.dismissShieldAbsorbed}>
+            Entendi
+          </button>
+        </div>
+      </div>
+
       {/* Inimigo eliminado (anúncio) */}
       <div className={`overlay ${overlays.elimAnnounce ? 'show' : ''}`}>
         <div className="overlay-box" style={{ borderColor: CHEX[overlays.elimAnnounce] }}>

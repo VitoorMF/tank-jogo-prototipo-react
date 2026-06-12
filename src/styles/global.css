@@ -284,6 +284,7 @@ button,input{font:inherit;}
 }
 .seg:active{transform:scale(.94);}
 .seg[data-on="1"]{border-color:var(--accent);color:#0a0a0a;background:var(--accent);box-shadow:0 0 16px var(--accent-glow);}
+.seg[disabled]{opacity:.22;cursor:not-allowed;pointer-events:none;background:transparent;border-style:dashed;}
 
 /* STEP 2 — place on physical board */
 .place-cards{display:grid;grid-template-columns:1fr 1fr;gap:14px;}

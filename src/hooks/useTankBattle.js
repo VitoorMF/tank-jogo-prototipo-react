@@ -78,7 +78,7 @@ export function useTankBattle() {
   const [effectiveTurnDuration, setEffectiveTurnDuration] = useState(TURN_DURATION_SECONDS);
   const [notif, setNotif] = useState({ show: false, msg: '', type: 'info' });
   const [online, setOnline] = useState(false);
-  const [overlays, setOverlays] = useState({ hit: false, elim: false, elimAnnounce: null, viewLives: false, skillActivated: null, missileTarget: false });
+  const [overlays, setOverlays] = useState({ hit: false, elim: false, elimAnnounce: null, viewLives: false, skillActivated: null, missileTarget: false, shieldAbsorbed: false });
   const [skillUsedThisRound, setSkillUsedThisRound] = useState(false);
   const [turnDone, setTurnDone] = useState(false);
 
@@ -86,6 +86,7 @@ export function useTankBattle() {
   const timerRef = useRef(null);
   const channelRef = useRef(null);
   const prevLivesRef = useRef(3);
+  const prevShieldRef = useRef(false);
   const wasElimRef = useRef(false);
   const prevEliminatedRef = useRef(new Set());
   const intentionalLeaveRef = useRef(false);
@@ -306,10 +307,16 @@ export function useTankBattle() {
       return;
     }
 
+    const hasShield = !!myPlayer.activeEffects?.shield;
     if (myPlayer.lives < prevLivesRef.current && !myPlayer.eliminated) {
       setOverlays((o) => ({ ...o, hit: true }));
+    } else if (prevShieldRef.current && !hasShield && myPlayer.lives === prevLivesRef.current && !myPlayer.eliminated) {
+      // Tinha escudo e ele sumiu sem perder vida => o escudo absorveu um tiro.
+      // Aviso privado: só o jogador escudado vê. O atirante não fica sabendo.
+      setOverlays((o) => ({ ...o, shieldAbsorbed: true }));
     }
     prevLivesRef.current = myPlayer.lives;
+    prevShieldRef.current = hasShield;
 
     if (currentPlayer() === g.myColor) {
       if (g.currentStep === 0) startMyTurn();
@@ -521,7 +528,7 @@ export function useTankBattle() {
     setScreen('home');
     setJoinCode('');
     setTimerValue(TURN_DURATION_SECONDS);
-    setOverlays({ hit: false, elim: false, elimAnnounce: null, viewLives: false, skillActivated: null, missileTarget: false });
+    setOverlays({ hit: false, elim: false, elimAnnounce: null, viewLives: false, skillActivated: null, missileTarget: false, shieldAbsorbed: false });
     setSkillUsedThisRound(false);
     setTurnDone(false);
   }, [clearSession, push, stopTimer]);
@@ -589,6 +596,12 @@ export function useTankBattle() {
     }
 
     const { x, y } = parsed;
+
+    if (isInsideZone(g.myColor, x, y)) {
+      showNotif('Não pode atirar na sua própria zona!', 'miss');
+      return;
+    }
+
     const key = coordKey(x, y);
     const myEffects = g.players[g.myColor]?.activeEffects || {};
     const isDoubleShot = !!myEffects.doubleShot;
@@ -615,8 +628,10 @@ export function useTankBattle() {
 
     if (hitColor) {
       if (players[hitColor].activeEffects?.shield) {
+        // Escudo absorve o tiro. NÃO avisamos o atirante — ele não pode
+        // saber que acertou (igual a um tiro normal). O jogador escudado
+        // recebe o aviso privado via reactToState (overlay shieldAbsorbed).
         players[hitColor].activeEffects = { ...players[hitColor].activeEffects, shield: false };
-        showNotif(`🛡️ ESCUDO de ${NAMES[hitColor]} absorveu!`, 'info');
       } else {
         const result = applyHit(hitColor, players, turnOrder);
         turnOrder = result.turnOrder;
@@ -730,8 +745,9 @@ export function useTankBattle() {
       let eliminationOrder = [...g.eliminationOrder];
 
       if (target.activeEffects?.shield) {
+        // Escudo absorve o míssil. O alvo recebe o aviso privado
+        // (overlay shieldAbsorbed via reactToState); o atacante não sabe.
         target.activeEffects = { ...target.activeEffects, shield: false };
-        showNotif(`🛡️ ESCUDO de ${NAMES[targetColor]} absorveu o míssil!`, 'info');
       } else {
         target.lives -= 1;
         if (target.lives <= 0) {
@@ -766,6 +782,10 @@ export function useTankBattle() {
 
   const dismissHit = useCallback(() => {
     setOverlays((o) => ({ ...o, hit: false }));
+  }, []);
+
+  const dismissShieldAbsorbed = useCallback(() => {
+    setOverlays((o) => ({ ...o, shieldAbsorbed: false }));
   }, []);
 
   const dismissViewLives = useCallback(() => {
@@ -1055,6 +1075,7 @@ export function useTankBattle() {
       proceedToMove,
       moveMyTank,
       dismissHit,
+      dismissShieldAbsorbed,
       dismissViewLives,
       dismissSkillActivated,
       activateSkill,

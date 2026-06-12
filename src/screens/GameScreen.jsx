@@ -3,7 +3,7 @@ import { ArenaGrid } from '../components/ArenaGrid';
 import { QRScanner } from '../components/QRScanner';
 import { Screen, Hud, Stepper, Prompt } from '../components/Shell';
 import { IconScan, IconTank, IconTarget, IconBluff } from '../components/Icons';
-import { SKILLS, CHEX, LETTERS } from '../constants/game';
+import { SKILLS, CHEX, LETTERS, isInsideZone } from '../constants/game';
 
 const COLS = LETTERS;
 const ROWS = [1, 2, 3, 4, 5, 6, 7, 8];
@@ -41,6 +41,12 @@ function StepCoord({ state, actions, onScan, skillUsedThisRound }) {
   const ready = game.shotCol && game.shotRow;
   const readout = ready ? `${game.shotCol}${game.shotRow}` : '—';
 
+  // Não pode atirar na própria zona. Desabilita os botões que formariam
+  // uma célula dentro da zona, considerando a outra seleção já feita.
+  const colToX = (c) => COLS.indexOf(c) + 1;
+  const colDisabled = (c) => !!game.shotRow && isInsideZone(game.myColor, colToX(c), Number(game.shotRow));
+  const rowDisabled = (n) => !!game.shotCol && isInsideZone(game.myColor, colToX(game.shotCol), n);
+
   return (
     <div className="stack stack-14 fade-in">
       <Prompt kicker={game.doubleshotFired ? 'Passo 1 · 2ª coordenada' : 'Passo 1 de 3 · Disparo'}>
@@ -68,7 +74,14 @@ function StepCoord({ state, actions, onScan, skillUsedThisRound }) {
           </div>
           <div className="strip cols8">
             {COLS.map((c) => (
-              <button type="button" className="seg" key={c} data-on={game.shotCol === c ? 1 : undefined} onClick={() => actions.setShotCol(c)}>
+              <button
+                type="button"
+                className="seg"
+                key={c}
+                data-on={game.shotCol === c ? 1 : undefined}
+                disabled={colDisabled(c)}
+                onClick={() => actions.setShotCol(c)}
+              >
                 {c}
               </button>
             ))}
@@ -81,7 +94,14 @@ function StepCoord({ state, actions, onScan, skillUsedThisRound }) {
           </div>
           <div className="strip cols8">
             {ROWS.map((n) => (
-              <button type="button" className="seg" key={n} data-on={game.shotRow === String(n) ? 1 : undefined} onClick={() => actions.setShotRow(String(n))}>
+              <button
+                type="button"
+                className="seg"
+                key={n}
+                data-on={game.shotRow === String(n) ? 1 : undefined}
+                disabled={rowDisabled(n)}
+                onClick={() => actions.setShotRow(String(n))}
+              >
                 {n}
               </button>
             ))}
