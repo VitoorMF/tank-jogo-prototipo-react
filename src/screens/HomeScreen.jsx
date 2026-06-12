@@ -1,7 +1,7 @@
 import React from 'react';
 import { Screen } from '../components/Shell';
 
-export function HomeScreen({ active, myName, onSetMyName, onCreate, onJoin, onHelp }) {
+export function HomeScreen({ active, myName, onSetMyName, onCreate, onJoin, onHelp, pendingSession, onResume }) {
   if (!active) return null;
   const canPlay = myName.trim().length > 0;
 
@@ -27,6 +27,11 @@ export function HomeScreen({ active, myName, onSetMyName, onCreate, onJoin, onHe
           />
         </div>
         <div className="stack stack-14">
+          {pendingSession?.roomCode && (
+            <button type="button" className="btn btn--success" onClick={onResume}>
+              ▶ Voltar para a partida {pendingSession.roomCode}
+            </button>
+          )}
           <button type="button" className="btn btn--primary" onClick={onCreate} disabled={!canPlay}>
             Criar sala
           </button>

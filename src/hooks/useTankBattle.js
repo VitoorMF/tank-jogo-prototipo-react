@@ -21,7 +21,7 @@ import { db } from '../services/supabase';
 
 const SESSION_KEY = 'tb_session';
 const NAME_KEY = 'tb_player_name';
-const TURN_DURATION_SECONDS = 90;
+const TURN_DURATION_SECONDS = 120;
 const SABOTAGE_DURATION_SECONDS = 45;
 
 const initialGame = {
@@ -81,6 +81,7 @@ export function useTankBattle() {
   const [overlays, setOverlays] = useState({ hit: false, elim: false, elimAnnounce: null, viewLives: false, skillActivated: null, missileTarget: false, shieldAbsorbed: false });
   const [skillUsedThisRound, setSkillUsedThisRound] = useState(false);
   const [turnDone, setTurnDone] = useState(false);
+  const [pendingSession, setPendingSession] = useState(null);
 
   const gameRef = useRef(game);
   const timerRef = useRef(null);
@@ -531,6 +532,7 @@ export function useTankBattle() {
     setOverlays({ hit: false, elim: false, elimAnnounce: null, viewLives: false, skillActivated: null, missileTarget: false, shieldAbsorbed: false });
     setSkillUsedThisRound(false);
     setTurnDone(false);
+    setPendingSession(null);
   }, [clearSession, push, stopTimer]);
 
   const startGame = useCallback(async () => {
@@ -901,50 +903,59 @@ export function useTankBattle() {
     });
   }, []);
 
-  useEffect(() => {
-    const init = async () => {
-      const { error } = await db.from('rooms').select('id').limit(1);
-      setOnline(!error);
-      if (error) {
-        showNotif('⚠ Rode o SQL no Supabase primeiro', 'miss');
-        return;
+  // Reconecta a uma sessão salva. Robusto: só apaga a sessão quando o servidor
+  // CONFIRMA que a sala não existe mais ou a partida acabou. Erro de rede nunca
+  // apaga a sessão — apenas falha e deixa o botão "voltar para a partida" ativo.
+  const reconnectToSession = useCallback(
+    async (sess) => {
+      if (!sess || !sess.roomCode || !sess.myColor) return false;
+
+      let data = null;
+      let confirmedMissing = false;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const res = await db.from('rooms').select('*').eq('code', sess.roomCode).maybeSingle();
+        if (res.error) {
+          await new Promise((r) => setTimeout(r, 700 * (attempt + 1)));
+          continue;
+        }
+        if (res.data) {
+          data = res.data;
+          break;
+        }
+        confirmedMissing = true; // respondeu sem erro e sem linha => sala realmente não existe
+        break;
       }
 
-      const sess = loadSession();
-      if (!sess) return;
-
-      const { data, error: err2 } = await db.from('rooms').select('*').eq('code', sess.roomCode).single();
-      if (err2 || !data) {
+      if (confirmedMissing) {
         clearSession();
-        return;
+        setPendingSession(null);
+        return false;
+      }
+      if (!data) {
+        // só houve erro de rede nas tentativas: mantém a sessão para reconexão manual
+        setPendingSession(sess);
+        return false;
       }
 
       const st = data.state;
       if (st.gameOver) {
         clearSession();
-        return;
+        setPendingSession(null);
+        return false;
       }
 
       const wasEverActive = st.players[sess.myColor]?.active || (st.turnOrder || []).includes(sess.myColor);
       if (!wasEverActive) {
         clearSession();
-        return;
+        setPendingSession(null);
+        return false;
       }
 
       const parsed = normalizeSharedState(st);
       const players = clonePlayers(parsed.players);
       players[sess.myColor].active = true;
 
-      await db
-        .from('rooms')
-        .update({
-          state: {
-            ...st,
-            players,
-            boardShots: parsed.boardShots,
-          },
-        })
-        .eq('code', sess.roomCode);
+      await db.from('rooms').update({ state: { ...st, players, boardShots: parsed.boardShots } }).eq('code', sess.roomCode);
 
       const nextGame = {
         ...initialGame,
@@ -959,21 +970,52 @@ export function useTankBattle() {
       COLORS.forEach((c) => { if (nextGame.players[c]?.eliminated) prevEliminatedRef.current.add(c); });
       setGame(nextGame);
       subscribe(sess.roomCode);
+      setPendingSession(null);
       showNotif('RECONECTADO! ✅', 'info');
 
-      if (!nextGame.gameStarted) {
-        setScreen('lobby');
-      }
+      if (!nextGame.gameStarted) setScreen('lobby');
+      return true;
+    },
+    [clearSession, showNotif, subscribe],
+  );
+
+  const resumeSession = useCallback(async () => {
+    const sess = loadSession();
+    if (!sess) {
+      setPendingSession(null);
+      return;
+    }
+    const ok = await reconnectToSession(sess);
+    if (!ok) showNotif('Não deu pra reconectar agora. Tente de novo.', 'miss');
+  }, [loadSession, reconnectToSession, showNotif]);
+
+  useEffect(() => {
+    const init = async () => {
+      const { error } = await db.from('rooms').select('id').limit(1);
+      setOnline(!error);
+
+      const sess = loadSession();
+      if (!sess) return;
+      // já mostra o botão "voltar para a partida" na home enquanto tenta reconectar
+      setPendingSession(sess);
+      await reconnectToSession(sess);
     };
 
     init();
 
-    const onVisibility = () => {
-      if (document.visibilityState === 'visible' && gameRef.current.roomCode && !intentionalLeaveRef.current) {
-        if (channelRef.current && channelRef.current.state !== 'joined') {
-          subscribe(gameRef.current.roomCode);
-        }
+    // Ao voltar do background: re-subscreve o realtime se caiu e re-sincroniza o
+    // estado (pode ter perdido atualizações enquanto a aba estava oculta).
+    const onVisibility = async () => {
+      if (document.visibilityState !== 'visible') return;
+      if (intentionalLeaveRef.current) return;
+      const g = gameRef.current;
+      if (!g.roomCode) return;
+
+      if (!channelRef.current || channelRef.current.state !== 'joined') {
+        subscribe(g.roomCode);
       }
+      const { data } = await db.from('rooms').select('state').eq('code', g.roomCode).maybeSingle();
+      if (data?.state) applyShared(data.state);
     };
 
     document.addEventListener('visibilitychange', onVisibility);
@@ -983,7 +1025,7 @@ export function useTankBattle() {
       document.removeEventListener('visibilitychange', onVisibility);
       if (channelRef.current) db.removeChannel(channelRef.current);
     };
-  }, [clearSession, loadSession, showNotif, stopTimer, subscribe]);
+  }, [applyShared, loadSession, reconnectToSession, stopTimer, subscribe]);
 
   useEffect(() => {
     if (pendingSkillRef.current && game.roomCode && game.myColor && game.gameStarted) {
@@ -1040,6 +1082,7 @@ export function useTankBattle() {
       online,
       overlays,
       turnDone,
+      pendingSession,
       skillUsedThisRound,
       canStart,
       playersReadyCount,
@@ -1060,6 +1103,7 @@ export function useTankBattle() {
     },
     actions: {
       setScreen: setScreenSafely,
+      resumeSession,
       setJoinCode,
       setMyName,
       selectColor,

@@ -15,7 +15,7 @@ import { WaitingScreen } from './screens/WaitingScreen';
 
 export default function App() {
   const { state, actions } = useTankBattle();
-  const { screen, notif, online, game, joinCode, myName } = state;
+  const { screen, notif, online, game, joinCode, myName, pendingSession } = state;
   const [showHelp, setShowHelp] = useState(false);
 
   return (
@@ -30,6 +30,8 @@ export default function App() {
         onCreate={() => actions.setScreen('create')}
         onJoin={() => actions.setScreen('join')}
         onHelp={() => setShowHelp(true)}
+        pendingSession={pendingSession}
+        onResume={actions.resumeSession}
       />
 
       <CreateScreen
