@@ -1,22 +1,23 @@
 import React from 'react';
 import { ColorSelector } from '../components/ColorSelector';
+import { Screen } from '../components/Shell';
+import { CHEX } from '../constants/game';
 
 export function CreateScreen({ active, myColor, players, onSelectColor, onCreateRoom, onBack }) {
+  if (!active) return null;
   return (
-    <div className={`screen ${active ? 'active' : ''}`}>
-      <div className="gap-l" />
-      <div className="logo logo-small">CRIAR SALA</div>
-      <div className="gap-l" />
-      <div className="section-title">ESCOLHA SUA COR</div>
+    <Screen accentHex={myColor ? CHEX[myColor] : undefined} footer={null}>
+      <div className="page-title">Criar sala</div>
+      <div className="section-label">Escolha sua cor</div>
       <ColorSelector selected={myColor} players={players} onSelect={onSelectColor} />
-      <div className="gap-m" />
-      <button type="button" className="btn" onClick={onCreateRoom}>
-        <span>CRIAR SALA</span>
-      </button>
-      <div className="gap-s" />
-      <button type="button" className="btn btn-ghost" onClick={onBack}>
-        <span>VOLTAR</span>
-      </button>
-    </div>
+      <div className="stack stack-14" style={{ marginTop: 6 }}>
+        <button type="button" className="btn btn--primary" onClick={onCreateRoom} disabled={!myColor}>
+          Criar sala
+        </button>
+        <button type="button" className="btn btn--ghost" onClick={onBack}>
+          Voltar
+        </button>
+      </div>
+    </Screen>
   );
 }

@@ -6,18 +6,29 @@ export const NAMES = {
 };
 
 export const CVARS = {
-  yellow: 'var(--yellow)',
-  red: 'var(--red)',
-  blue: 'var(--blue)',
-  verde: 'var(--verde)',
+  yellow: 'var(--p-yellow)',
+  red: 'var(--p-red)',
+  blue: 'var(--p-blue)',
+  verde: 'var(--p-verde)',
 };
 
 export const CHEX = {
-  yellow: '#f5c842',
-  red: '#ff4455',
-  blue: '#44aaff',
-  verde: '#44ff88',
+  yellow: '#f6c945',
+  red: '#ff4646',
+  blue: '#3b86f0',
+  verde: '#34c759',
 };
+
+// CSS custom-props that tint a screen to a player's color
+export function accentVars(hex) {
+  if (!hex) return undefined;
+  return {
+    '--accent': hex,
+    '--accent-2': `color-mix(in srgb, ${hex} 65%, #ffffff)`,
+    '--accent-soft': `color-mix(in srgb, ${hex} 15%, transparent)`,
+    '--accent-glow': `color-mix(in srgb, ${hex} 50%, transparent)`,
+  };
+}
 
 export const EMOJI = {
   yellow: '🟡',

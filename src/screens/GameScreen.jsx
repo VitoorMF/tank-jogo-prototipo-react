@@ -1,30 +1,24 @@
 import React, { useState } from 'react';
 import { ArenaGrid } from '../components/ArenaGrid';
 import { QRScanner } from '../components/QRScanner';
-import { SKILLS } from '../constants/game';
+import { Screen, Hud, Stepper, Prompt } from '../components/Shell';
+import { IconScan, IconTank, IconTarget, IconBluff } from '../components/Icons';
+import { SKILLS, CHEX, LETTERS } from '../constants/game';
+
+const COLS = LETTERS;
+const ROWS = [1, 2, 3, 4, 5, 6, 7, 8];
 
 function ActiveEffects({ myPlayer }) {
   const effects = myPlayer?.activeEffects || {};
   const active = Object.entries(effects).filter(([, v]) => v);
   if (!active.length) return null;
   return (
-    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+    <div className="fx-badges">
       {active.map(([id]) => {
         const skill = SKILLS[id];
         if (!skill) return null;
         return (
-          <span
-            key={id}
-            style={{
-              fontSize: 10,
-              letterSpacing: 1,
-              padding: '3px 8px',
-              border: '1px solid var(--green)',
-              color: 'var(--green)',
-              borderRadius: 3,
-              fontFamily: 'Barlow Condensed, sans-serif',
-            }}
-          >
+          <span key={id} className="fx-badge">
             {skill.emoji} {skill.name}
           </span>
         );
@@ -33,201 +27,210 @@ function ActiveEffects({ myPlayer }) {
   );
 }
 
-function StepContent({ state, actions }) {
-  const { game, CVARS, coordLabel, turnDone, myPlayer } = state;
-  const myEffects = myPlayer?.activeEffects || {};
+function SkillLink({ onScan }) {
+  return (
+    <button type="button" className="btn btn--success btn--sm" onClick={onScan} style={{ marginTop: 4 }}>
+      <IconScan size={18} /> Ler carta de skill
+    </button>
+  );
+}
 
-  if (game.currentStep === 1) {
-    return (
-      <>
-        {game.doubleshotFired && (
-          <div style={{ color: 'var(--green)', fontSize: 11, letterSpacing: 2, marginBottom: 8, textAlign: 'center' }}>
-            🎯 1º TIRO EFETUADO · DISPARE O 2º
-          </div>
+// STEP 1 — choose coordinate
+function StepCoord({ state, actions, onScan, skillUsedThisRound }) {
+  const { game } = state;
+  const ready = game.shotCol && game.shotRow;
+  const readout = ready ? `${game.shotCol}${game.shotRow}` : '—';
+
+  return (
+    <div className="stack stack-14 fade-in">
+      <Prompt kicker={game.doubleshotFired ? 'Passo 1 · 2ª coordenada' : 'Passo 1 de 3 · Disparo'}>
+        {game.doubleshotFired ? (
+          <>
+            Dispare o <span className="hl">2º tiro</span>
+          </>
+        ) : (
+          <>
+            Onde você vai <span className="hl">atirar</span>?
+          </>
         )}
-        <div className="target-grid-wrap" style={{ borderColor: 'var(--accent)', background: 'rgba(0,0,0,0.15)' }}>
-          <div className="target-grid-label" style={{ color: 'var(--accent)' }}>
-            {game.doubleshotFired ? 'PASSO 1 · 2ª COORDENADA' : 'PASSO 1 · COORDENADA DE BOMBARDEIO'}
-          </div>
+      </Prompt>
 
-          <div className="coord-inputs">
-            <input
-              className="coord-input"
-              placeholder="A"
-              maxLength={1}
-              value={game.shotCol}
-              onChange={(e) => actions.setShotCol(e.target.value)}
-            />
-            <span className="coord-sep">·</span>
-            <input
-              className="coord-input"
-              placeholder="1"
-              maxLength={1}
-              value={game.shotRow}
-              onChange={(e) => actions.setShotRow(e.target.value)}
-            />
-          </div>
+      <div className="coord-readout">
+        <span className="cap">Alvo</span>
+        <span className={`coord-big ${ready ? '' : 'empty'}`}>{readout}</span>
+      </div>
 
-          <div className="muted" style={{ marginTop: 10 }}>
-            Use qualquer casa de A1 até H8
+      <div className="picker">
+        <div className="picker-block">
+          <div className="picker-label">
+            <span>Coluna</span>
+            <span>A – H</span>
+          </div>
+          <div className="strip cols8">
+            {COLS.map((c) => (
+              <button type="button" className="seg" key={c} data-on={game.shotCol === c ? 1 : undefined} onClick={() => actions.setShotCol(c)}>
+                {c}
+              </button>
+            ))}
           </div>
         </div>
+        <div className="picker-block">
+          <div className="picker-label">
+            <span>Linha</span>
+            <span>1 – 8</span>
+          </div>
+          <div className="strip cols8">
+            {ROWS.map((n) => (
+              <button type="button" className="seg" key={n} data-on={game.shotRow === String(n) ? 1 : undefined} onClick={() => actions.setShotRow(String(n))}>
+                {n}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
 
-        <div className="gap-s" />
-        <button type="button" className="btn" onClick={actions.stageShotFromInput}>
-          <span>ATIRAR</span>
-        </button>
-      </>
-    );
-  }
+      <p style={{ margin: '2px 0 0', textAlign: 'center', color: 'var(--ink-3)', fontSize: 12.5, letterSpacing: '.06em', lineHeight: 1.5 }}>
+        Escolha a casa que quer bombardear e <b style={{ color: 'var(--ink-2)', fontWeight: 400 }}>anuncie em voz alta</b> para a mesa.
+      </p>
 
-  if (game.currentStep === 2 && myPlayer?.pos && game.myColor) {
-    const tankColor = game.myColor;
-    const { x: tankX, y: tankY } = myPlayer.pos;
-    const silenced = !!myEffects.silenceShot;
+      <button type="button" className="btn btn--solid" disabled={!ready} onClick={actions.stageShotFromInput}>
+        {ready ? `Atirar em ${readout}` : 'Atirar'}
+      </button>
+      {!skillUsedThisRound && <SkillLink onScan={onScan} />}
+    </div>
+  );
+}
 
+// STEP 2 — mark on physical board
+function StepPlace({ state, actions }) {
+  const { game, myPlayer, coordLabel } = state;
+  const myEffects = myPlayer?.activeEffects || {};
+  const silenced = !!myEffects.silenceShot;
+  const tank = myPlayer?.pos ? coordLabel(myPlayer.pos.x, myPlayer.pos.y) : '—';
+
+  return (
+    <div className="stack stack-14 fade-in">
+      <Prompt kicker="Passo 2 de 3 · Tabuleiro real">
+        Marque no <span className="hl">tabuleiro físico</span>
+      </Prompt>
+
+      <div className="place-cards">
+        <div className="place-card tank">
+          <div className="pc-lbl">Seu tanque</div>
+          <span className="pc-ico">
+            <IconTank size={46} style={{ color: silenced ? 'var(--ink-3)' : 'var(--accent)' }} />
+          </span>
+          <div className={`pc-coord ${silenced ? 'muted' : ''}`}>{silenced ? '🤫 OCULTO' : tank}</div>
+        </div>
+        <div className="place-card shot">
+          <div className="pc-lbl">Alvo do tiro</div>
+          <span className="pc-ico">
+            <IconTarget size={42} style={{ color: 'var(--red-2)' }} />
+          </span>
+          <div className="pc-coord">
+            {game.pendingShot ? coordLabel(game.pendingShot.x, game.pendingShot.y) : '—'}
+            {game.pendingShot2 ? ` · ${coordLabel(game.pendingShot2.x, game.pendingShot2.y)}` : ''}
+          </div>
+        </div>
+      </div>
+
+      <div className="place-instr">
+        <span className="big">
+          <IconTarget size={20} style={{ color: 'var(--accent)' }} />
+        </span>
+        <span>
+          Coloque os <b style={{ color: 'var(--ink)', fontWeight: 400 }}>marcadores</b> no tabuleiro de verdade e confira se o tiro acertou alguém.
+        </span>
+      </div>
+
+      <button type="button" className="btn btn--solid" onClick={actions.proceedToMove}>
+        Marquei — continuar
+      </button>
+    </div>
+  );
+}
+
+// STEP 3 — move (4x4 zone grid)
+function StepMove({ state, actions }) {
+  const { game, myPlayer, turnDone, coordLabel, CHEX: chex } = state;
+  const jumpMode = !!myPlayer?.activeEffects?.jump && !turnDone;
+
+  if (turnDone) {
+    const pos = myPlayer?.pos;
     return (
-      <div style={{ background: 'var(--bg3)', border: '1px solid var(--accent)', padding: 14, marginBottom: 8 }}>
-        <div className="step-help" style={{ marginBottom: 16 }}>PASSO 2 · POSICIONE NO TABULEIRO FÍSICO</div>
-
-        <div style={{ display: 'flex', gap: 16 }}>
-          <div style={{ flex: 1 }}>
-            <div className="muted" style={{ fontSize: 10, letterSpacing: 2, marginBottom: 4 }}>SEU TANQUE</div>
-            {silenced ? (
-              <div style={{ fontFamily: 'Orbitron, monospace', fontSize: 16, color: 'var(--muted)', letterSpacing: 2 }}>
-                🤫 OCULTO
-              </div>
-            ) : (
-              <div style={{ fontFamily: 'Orbitron, monospace', fontSize: 22, color: CVARS[tankColor], letterSpacing: 4 }}>
-                {coordLabel(tankX, tankY)}
-              </div>
-            )}
-          </div>
-
-          {game.pendingShot && (
-            <div style={{ flex: 1 }}>
-              <div className="muted" style={{ fontSize: 10, letterSpacing: 2, marginBottom: 4 }}>ALVO DO TIRO</div>
-              <div style={{ fontFamily: 'Orbitron, monospace', fontSize: 22, color: 'var(--accent)', letterSpacing: 4 }}>
-                {coordLabel(game.pendingShot.x, game.pendingShot.y)}
-              </div>
-            </div>
-          )}
-
-          {game.pendingShot2 && (
-            <div style={{ flex: 1 }}>
-              <div className="muted" style={{ fontSize: 10, letterSpacing: 2, marginBottom: 4 }}>2º ALVO</div>
-              <div style={{ fontFamily: 'Orbitron, monospace', fontSize: 22, color: 'var(--accent)', letterSpacing: 4 }}>
-                {coordLabel(game.pendingShot2.x, game.pendingShot2.y)}
-              </div>
-            </div>
-          )}
+      <div className="stack stack-14 fade-in">
+        <Prompt kicker="Passo 3 de 3 · Concluído">
+          Tanque <span className="hl">escondido</span>
+        </Prompt>
+        <div className="confirm-bar">
+          Turno concluído
+          <small>Mexa (ou não) sua peça no tabuleiro físico</small>
         </div>
+        <button type="button" className="btn btn--success" onClick={actions.advanceTurn}>
+          Finalizar turno
+        </button>
       </div>
     );
   }
 
-  if (game.currentStep === 3) {
-    return (
-      <>
-        <div className="muted" style={{ marginBottom: 8 }}>
-          PASSO 3 · {myEffects.jump ? '⚡ SALTO — TOQUE QUALQUER CÉLULA' : 'TOQUE PARA ONDE MOVER SEU TANQUE'}
-        </div>
-        {turnDone && (
-          <div className="turn-done">
-            <div className="turn-done-title">TURNO CONCLUIDO</div>
-          </div>
-        )}
-      </>
-    );
-  }
+  return (
+    <div className="stack stack-14 fade-in">
+      <Prompt kicker="Passo 3 de 3 · Esconder">
+        Para onde <span className="hl">mover</span>?
+      </Prompt>
+      <p style={{ margin: '-4px 0 0', textAlign: 'center', color: 'var(--ink-2)', fontSize: 13, lineHeight: 1.45 }}>
+        Mova <b style={{ color: 'var(--ink)', fontWeight: 400 }}>1 casa</b> em qualquer direção dentro da sua zona — ou fique parado pra blefar.
+        {jumpMode && <b style={{ color: 'var(--accent-2)' }}> ⚡ Salto: qualquer casa da zona.</b>}
+      </p>
 
-  return null;
+      <ArenaGrid myColor={game.myColor} myPos={myPlayer?.pos} shotCells={game.boardShots} mode="move" onMove={actions.moveMyTank} jumpMode={jumpMode} />
+
+      <div className="legend">
+        <span className="lg-move">
+          <i />
+          Mover
+        </span>
+        <span className="lg-stay">
+          <i />
+          Ficar (blefe)
+        </span>
+      </div>
+
+      <button type="button" className="btn btn--ghost" onClick={actions.advanceTurn}>
+        <IconBluff size={16} /> Ficar aqui (blefe)
+      </button>
+    </div>
+  );
 }
 
 export function GameScreen({ active, state, actions }) {
-  const { game, timerValue, myPlayer, CVARS, NAMES, turnBadge, turnDone, turnDuration, skillUsedThisRound } = state;
-  const timerUrgent = timerValue <= 10;
+  const { game, timerValue, myPlayer, NAMES, turnDuration, skillUsedThisRound } = state;
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
-  const jumpMode = !!(myPlayer?.activeEffects?.jump) && game.currentStep === 3 && !turnDone;
+  if (!active) return null;
+
+  const accentHex = CHEX[game.myColor];
+  const urgent = timerValue <= 10;
+  const playerName = myPlayer?.name?.trim() || NAMES[game.myColor] || '—';
+  const timePct = Math.max(0, Math.round((timerValue / turnDuration) * 100));
 
   return (
-    <div className={`screen ${active ? 'active' : ''}`}>
-      <div className="hud">
-        <div>
-          <div className="hud-player" style={{ color: CVARS[game.myColor] || 'var(--text)' }}>
-            {NAMES[game.myColor] || '—'}
-          </div>
-          <div className="muted" style={{ fontSize: 10, marginTop: 2 }}>RODADA {game.round}</div>
-        </div>
-
-        <div style={{ textAlign: 'center' }}>
-          <div className={`timer ${timerUrgent ? 'urgent' : ''}`}>{timerValue}</div>
-          <div className="timer-bar-bg">
-            <div
-              className={`timer-bar ${timerUrgent ? 'urgent' : ''}`}
-              style={{ width: `${(timerValue / turnDuration) * 100}%` }}
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="turn-badge" style={{ borderLeftColor: turnBadge.color, color: turnBadge.color }}>{turnBadge.text}</div>
-
-      <div className="steps">
-        {[1, 2, 3].map((step) => (
-          <div key={step} className={`step ${game.currentStep === step ? 'active' : ''} ${game.currentStep > step ? 'done' : ''}`}>
-            <span className="step-num">{step}</span>
-            {step === 1 ? 'COORD.' : step === 2 ? 'POSIC.' : 'MOVER'}
-          </div>
-        ))}
-      </div>
-
-      <div style={{ width: '100%', maxWidth: 380 }}>
-        <ActiveEffects myPlayer={myPlayer} />
-        <StepContent state={state} actions={actions} />
-      </div>
-
-      <div className="section-title" style={{ marginTop: 10 }}>SUA ZONA</div>
-      <ArenaGrid
-        myColor={game.myColor}
-        myPos={myPlayer?.pos}
-        shotCells={game.boardShots}
-        mode={game.currentStep === 3 && !turnDone ? 'move' : 'view'}
-        onMove={actions.moveMyTank}
-        colorVar={CVARS[game.myColor]}
-        jumpMode={jumpMode}
-      />
-
-      <div className="gap-s" />
-      {game.currentStep === 2 && (
-        <button type="button" className="btn btn-ghost" onClick={actions.proceedToMove}>
-          <span>POSICIONEI - MOVER</span>
+    <Screen
+      accentHex={accentHex}
+      footer={
+        <button type="button" className="link-danger" onClick={() => setShowLeaveConfirm(true)}>
+          Sair da partida
         </button>
-      )}
-      {game.currentStep === 3 && !turnDone && (
-        <button type="button" className="btn btn-ghost" onClick={actions.advanceTurn}>
-          <span>FICAR AQUI</span>
-        </button>
-      )}
-      {game.currentStep === 3 && turnDone && (
-        <button type="button" className="btn btn-ghost" onClick={actions.advanceTurn}>
-          <span>FINALIZAR TURNO</span>
-        </button>
-      )}
+      }
+    >
+      <Hud name={playerName} round={game.round} time={timerValue} timePct={timePct} urgent={urgent} lives={myPlayer?.lives} />
+      <Stepper current={game.currentStep} />
 
-      {game.currentStep === 1 && !skillUsedThisRound && (
-        <div style={{ marginTop: 12 }}>
-          <button
-            type="button"
-            className="btn btn-ghost"
-            style={{ fontSize: 12, borderColor: 'var(--green)', color: 'var(--green)' }}
-            onClick={() => setShowScanner(true)}
-          >
-            <span>🎴 LER CARTA DE SKILL</span>
-          </button>
-        </div>
-      )}
+      <ActiveEffects myPlayer={myPlayer} />
+
+      {game.currentStep === 1 && <StepCoord state={state} actions={actions} onScan={() => setShowScanner(true)} skillUsedThisRound={skillUsedThisRound} />}
+      {game.currentStep === 2 && <StepPlace state={state} actions={actions} />}
+      {game.currentStep === 3 && <StepMove state={state} actions={actions} />}
 
       {showScanner && (
         <QRScanner
@@ -239,28 +242,20 @@ export function GameScreen({ active, state, actions }) {
         />
       )}
 
-      <div className="leave-bottom">
-        <button type="button" className="btn-leave" onClick={() => setShowLeaveConfirm(true)}>
-          SAIR DA PARTIDA
-        </button>
-      </div>
-
       <div className={`overlay ${showLeaveConfirm ? 'show' : ''}`}>
-        <div className="overlay-box" style={{ borderColor: 'var(--accent2)' }}>
-          <div className="overlay-title" style={{ color: 'var(--accent2)' }}>
-            CONFIRMAR SAÍDA
+        <div className="overlay-box" style={{ borderColor: 'var(--red)' }}>
+          <div className="overlay-title" style={{ color: 'var(--red)' }}>
+            Sair da partida?
           </div>
-          <div className="muted" style={{ textAlign: 'center', lineHeight: 1.7 }}>
-            Você vai abandonar a partida atual.
-          </div>
-          <button type="button" className="btn btn-danger" onClick={actions.leaveRoom}>
-            <span>SIM, SAIR AGORA</span>
+          <div style={{ color: 'var(--ink-2)', fontSize: 13, lineHeight: 1.6 }}>Você vai abandonar a partida atual.</div>
+          <button type="button" className="btn btn--danger" onClick={actions.leaveRoom}>
+            Sim, sair agora
           </button>
-          <button type="button" className="btn btn-ghost" onClick={() => setShowLeaveConfirm(false)}>
-            <span>CONTINUAR NA PARTIDA</span>
+          <button type="button" className="btn btn--ghost" onClick={() => setShowLeaveConfirm(false)}>
+            Continuar na partida
           </button>
         </div>
       </div>
-    </div>
+    </Screen>
   );
 }

@@ -1,26 +1,25 @@
 import React from 'react';
+import { CHEX, NAMES } from '../constants/game';
+import { Dot } from './Shell';
+
+const ORDER = ['yellow', 'red', 'blue', 'verde'];
 
 export function ColorSelector({ selected, players, onSelect }) {
   return (
     <div className="color-grid">
-      {[
-        { key: 'yellow', emoji: '🟡', label: 'AMARELO' },
-        { key: 'red', emoji: '🔴', label: 'VERMELHO' },
-        { key: 'blue', emoji: '🔵', label: 'AZUL' },
-        { key: 'verde', emoji: '🟢', label: 'VERDE' },
-      ].map((c) => {
-        const taken = players?.[c.key]?.active && selected !== c.key;
+      {ORDER.map((key) => {
+        const taken = players?.[key]?.active && selected !== key;
         return (
           <button
-            key={c.key}
+            key={key}
             type="button"
-            className={`color-btn ${selected === c.key ? 'selected' : ''} ${taken ? 'taken' : ''}`}
-            data-color={c.key}
-            onClick={() => onSelect(c.key)}
+            className="color-card"
+            data-on={selected === key ? 1 : undefined}
+            style={{ '--cc': CHEX[key] }}
+            onClick={() => onSelect(key)}
             disabled={taken}
           >
-            <span>{c.emoji}</span>
-            {c.label}
+            <Dot color={CHEX[key]} /> {NAMES[key]}
           </button>
         );
       })}

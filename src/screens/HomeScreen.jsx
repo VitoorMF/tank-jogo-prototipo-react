@@ -1,38 +1,45 @@
 import React from 'react';
+import { Screen } from '../components/Shell';
 
-export function HomeScreen({ active, myName, onSetMyName, onCreate, onJoin }) {
+export function HomeScreen({ active, myName, onSetMyName, onCreate, onJoin, onHelp }) {
+  if (!active) return null;
   const canPlay = myName.trim().length > 0;
 
   return (
-    <div className={`screen ${active ? 'active' : ''}`}>
-      <div className="gap-xl" />
-      <div className="logo">
-        TANK
-        <br />
-        BATTLE
+    <Screen footer={<span style={{ color: 'var(--ink-3)', fontSize: 12, letterSpacing: '.24em' }}>v1.1 · React</span>}>
+      <div className="grow center-col" style={{ gap: 30, paddingTop: 20 }}>
+        <div>
+          <div className="logo">
+            TANK
+            <br />
+            BATTLE
+          </div>
+          <div className="logo-sub">Hybrid Board Game</div>
+        </div>
+        <div>
+          <div className="field-label">Seu nome</div>
+          <input
+            className="text-field"
+            maxLength={16}
+            placeholder="COMANDANTE"
+            value={myName}
+            onChange={(e) => onSetMyName(e.target.value.toUpperCase())}
+          />
+        </div>
+        <div className="stack stack-14">
+          <button type="button" className="btn btn--primary" onClick={onCreate} disabled={!canPlay}>
+            Criar sala
+          </button>
+          <button type="button" className="btn btn--ghost" onClick={onJoin} disabled={!canPlay}>
+            Entrar na sala
+          </button>
+          {onHelp && (
+            <button type="button" className="link-danger" style={{ color: 'var(--ink-2)' }} onClick={onHelp}>
+              Como jogar?
+            </button>
+          )}
+        </div>
       </div>
-      <div className="logo-sub">HYBRID BOARD GAME</div>
-      <div className="gap-xl" />
-      <div className="input-group">
-        <span className="input-label">SEU NOME</span>
-        <input
-          className="input-field"
-          maxLength={16}
-          placeholder="COMANDANTE"
-          value={myName}
-          onChange={(e) => onSetMyName(e.target.value.toUpperCase())}
-        />
-      </div>
-      <div className="gap-m" />
-      <button type="button" className="btn" onClick={onCreate} disabled={!canPlay}>
-        <span>CRIAR SALA</span>
-      </button>
-      <div className="gap-s" />
-      <button type="button" className="btn btn-ghost" onClick={onJoin} disabled={!canPlay}>
-        <span>ENTRAR NA SALA</span>
-      </button>
-      <div className="gap-l" />
-      <div className="muted">v1.1 - REACT</div>
-    </div>
+    </Screen>
   );
 }

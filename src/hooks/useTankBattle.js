@@ -196,7 +196,9 @@ export function useTankBattle() {
       turnOrder: nextTurnOrder,
       currentTurnIdx: nextIdx,
       round: nextRound,
-      roundSnapshot: nextRound > g.round ? clonePlayers(nextPlayers) : g.roundSnapshot,
+      // O snapshot não é mais resetado por rodada: cada jogador publica a
+      // própria vida no começo do turno dele (ver startMyTurn).
+      roundSnapshot: g.roundSnapshot,
       currentStep: 0,
       pendingShot: null,
       pendingShot2: null,
@@ -243,6 +245,12 @@ export function useTankBattle() {
     setSkillUsedThisRound(false);
     setTurnDone(false);
 
+    // Publica a vida real do jogador no snapshot ao começar o turno dele.
+    // Assim os outros passam a ver a vida atualizada dele a partir da vez dele
+    // (em vez de só no fim da rodada). A posição continua oculta.
+    const snapshot = clonePlayers(g.roundSnapshot || g.players);
+    snapshot[g.myColor] = clonePlayers(g.players)[g.myColor];
+
     const nextGame = {
       ...g,
       currentStep: 1,
@@ -252,12 +260,13 @@ export function useTankBattle() {
       shotCol: '',
       shotRow: '',
       sabotagedColor: sabotaged ? null : g.sabotagedColor,
+      roundSnapshot: snapshot,
     };
     setGame(nextGame);
+    push(nextGame);
 
     if (sabotaged) {
       showNotif('⏱️ TURNO SABOTADO! Apenas 45s', 'miss');
-      push(nextGame);
     }
 
     setScreenSafely('game');
@@ -399,6 +408,42 @@ export function useTankBattle() {
     renderLobby();
     showNotif('SALA CRIADA! 🎮', 'info');
   }, [renderLobby, saveSession, shared, showNotif, subscribe]);
+
+  // Passo 1 do fluxo de entrar: valida o código, carrega o estado da sala
+  // e abre a tela de cores já subscrito (cores ocupadas em tempo real).
+  const enterCode = useCallback(async () => {
+    const code = joinCode.trim().toUpperCase();
+    if (code.length < 4) {
+      showNotif('Código inválido!', 'miss');
+      return;
+    }
+
+    const { data, error } = await db.from('rooms').select('*').eq('code', code).single();
+    if (error || !data) {
+      showNotif('SALA NÃO ENCONTRADA!', 'miss');
+      return;
+    }
+    if (data.state?.gameStarted) {
+      showNotif('Partida já começou!', 'miss');
+      return;
+    }
+
+    const parsed = normalizeSharedState(data.state);
+    setGame((prev) => ({ ...prev, ...parsed, roomCode: code, myColor: null }));
+    subscribe(code);
+    setScreenSafely('joinColor');
+  }, [joinCode, setScreenSafely, showNotif, subscribe]);
+
+  // Cancela o fluxo de entrar (sai da subscription de preview e volta pra home).
+  const abortJoin = useCallback(() => {
+    if (channelRef.current) {
+      db.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
+    setGame({ ...initialGame, players: mkPlayers() });
+    setJoinCode('');
+    setScreenSafely('home');
+  }, [setScreenSafely]);
 
   const joinRoom = useCallback(async () => {
     const g = gameRef.current;
@@ -999,6 +1044,8 @@ export function useTankBattle() {
       setMyName,
       selectColor,
       createRoom,
+      enterCode,
+      abortJoin,
       joinRoom,
       leaveRoom,
       startGame,

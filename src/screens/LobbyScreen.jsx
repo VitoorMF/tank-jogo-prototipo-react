@@ -1,60 +1,60 @@
 import React from 'react';
+import { Screen, Dot, OnlineTag } from '../components/Shell';
+import { IconPlay } from '../components/Icons';
+import { CHEX } from '../constants/game';
 
 export function LobbyScreen({ active, state, actions }) {
-  const { game, playersReadyCount, canStart, COLORS, CVARS, NAMES, EMOJI } = state;
+  if (!active) return null;
+  const { game, playersReadyCount, canStart, COLORS, CHEX: chex, NAMES, online } = state;
+  const accentHex = game.myColor ? (chex || CHEX)[game.myColor] : undefined;
 
   return (
-    <div className={`screen ${active ? 'active' : ''}`}>
-      <div className="gap-m" />
-      <div className="logo" style={{ fontSize: 20 }}>
-        AGUARDANDO JOGADORES
+    <Screen accentHex={accentHex} footer={null}>
+      <div className="page-title" style={{ fontSize: 30, lineHeight: 1.05 }}>
+        Aguardando
+        <br />
+        jogadores
       </div>
-      <div className="gap-m" />
-      <div className="section-title">CODIGO DA SALA</div>
-      <div className="room-code">{game.roomCode || '------'}</div>
-      <div className="gap-s" />
-      <div className="muted" style={{ fontSize: 10 }}>
-        Compartilhe este codigo com os outros jogadores
+
+      <div className="section-label">Código da sala</div>
+      <div className="code-hero">
+        <b>{game.roomCode || '------'}</b>
       </div>
-      <div className="gap-m" />
-      <div className="section-title">JOGADORES</div>
-      <div className="players-list">
+      <div className="code-caption">Compartilhe este código com os outros jogadores</div>
+
+      <div className="section-label">Jogadores</div>
+      <div className="stack stack-10">
         {COLORS.map((c) => {
           const filled = game.players[c]?.active;
+          const status = filled ? (c === game.myColor ? 'Você' : 'Conectado') : 'Aguardando';
           return (
-            <div
-              key={c}
-              className={`player-slot ${filled ? 'filled' : ''}`}
-              style={{ borderLeft: `4px solid ${filled ? CVARS[c] : 'transparent'}` }}
-            >
-              <div className="dot" style={filled ? { background: CVARS[c] } : undefined} />
-              <span>
-                {EMOJI[c]} {game.players[c]?.name || NAMES[c]}
+            <div className="player-row" key={c} data-dim={filled ? undefined : 1} style={{ '--cc': (chex || CHEX)[c] }}>
+              <span className="accent-bar" />
+              <span className="ready-dot" data-on={filled ? 1 : undefined} />
+              <Dot color={(chex || CHEX)[c]} />
+              <span className="player-name">{game.players[c]?.name || NAMES[c]}</span>
+              <span className="player-status" data-live={filled ? 1 : undefined}>
+                {status}
               </span>
-              <span className="slot-status">{filled ? (c === game.myColor ? 'VOCE' : 'CONECTADO') : 'AGUARDANDO'}</span>
             </div>
           );
         })}
       </div>
 
       {canStart && (
-        <>
-          <div className="gap-m" />
-          <button type="button" className="btn" onClick={actions.startGame}>
-            <span>▶ INICIAR PARTIDA</span>
-          </button>
-        </>
+        <button type="button" className="btn btn--primary" style={{ marginTop: 6 }} onClick={actions.startGame}>
+          <IconPlay size={18} /> Iniciar partida
+        </button>
       )}
 
-      <div className="muted" style={{ marginTop: 10 }}>
-        {game.isHost
-          ? `${playersReadyCount}/4 • Aguardando mais jogadores`
-          : `${playersReadyCount}/4 • Aguardando host iniciar`}
+      <div style={{ textAlign: 'center', color: 'var(--ink-3)', fontSize: 12.5, letterSpacing: '.14em', textTransform: 'uppercase' }}>
+        {game.isHost ? `${playersReadyCount}/4 · Aguardando mais jogadores` : `${playersReadyCount}/4 · Aguardando host iniciar`}
       </div>
-      <div className="gap-m" />
-      <button type="button" className="btn btn-ghost" onClick={actions.leaveRoom}>
-        <span>SAIR DA SALA</span>
+
+      <button type="button" className="btn btn--ghost" onClick={actions.leaveRoom}>
+        Sair da sala
       </button>
-    </div>
+      <OnlineTag online={online} />
+    </Screen>
   );
 }

@@ -1,85 +1,90 @@
 import React from 'react';
+import { Screen } from '../components/Shell';
+import { CHEX, NAMES } from '../constants/game';
+
+function nameOf(players, color) {
+  return players[color]?.name?.trim() ? players[color].name.toUpperCase() : NAMES[color];
+}
 
 export function EndScreen({ active, state, actions }) {
-  const { game, CVARS, EMOJI, NAMES, endStats } = state;
+  if (!active) return null;
+  const { game, endStats } = state;
   const winnerIsMe = game.winner && game.winner === game.myColor;
+  const accentHex = game.winner ? CHEX[game.winner] : undefined;
 
   return (
-    <div className={`screen ${active ? 'active' : ''}`}>
-      <div className="gap-l" />
-      <div className="logo" style={{ fontSize: 20 }}>
-        FIM DE PARTIDA
-      </div>
-      <div className="gap-m" />
-      <div className="winner-banner" style={{ borderColor: game.winner ? CVARS[game.winner] : 'var(--border)' }}>
-        {game.winner ? `${EMOJI[game.winner]} ${NAMES[game.winner]}\n${winnerIsMe ? 'VOCE VENCEU! 🏆' : 'VENCEU!'}` : 'EMPATE'}
+    <Screen accentHex={accentHex} footer={null}>
+      <div className="section-label">Fim de partida</div>
+
+      <div className="winner-banner">
+        {game.winner ? (
+          <>
+            <div className="wb-title">{nameOf(game.players, game.winner)}</div>
+            <div style={{ color: 'var(--accent-2)', letterSpacing: '.14em', fontSize: 15, marginTop: 6, textTransform: 'uppercase' }}>
+              {winnerIsMe ? 'Você venceu! 🏆' : 'Venceu! 🏆'}
+            </div>
+          </>
+        ) : (
+          <div className="wb-title">Empate</div>
+        )}
       </div>
 
-      <div className="gap-s" />
-      <div className="section-title">RANKING</div>
-      <div className="w-full">
+      <div className="section-label">Ranking</div>
+      <div className="stack stack-10">
         {endStats.ranking.map(({ color, position }) => (
-          <div key={color} className="stat-row" style={{ borderLeft: `3px solid ${CVARS[color]}`, paddingLeft: 10 }}>
-            <span style={{ color: CVARS[color], fontFamily: 'Orbitron, monospace', fontSize: 12 }}>
-              {position === null ? '🏆' : `${position}º`} {EMOJI[color]} {game.players[color]?.name || NAMES[color]}
-            </span>
-            <span className="stat-val" style={{ fontSize: 11 }}>
+          <div className="rank-row" key={color} style={{ '--cc': CHEX[color] }}>
+            <span className="rank-pos">{position === null ? '🏆' : `${position}º`}</span>
+            <span className="rank-name">{nameOf(game.players, color)}</span>
+            <span style={{ color: 'var(--ink-3)', fontSize: 11, letterSpacing: '.08em', textAlign: 'right' }}>
               {game.players[color]?.killedBy
-                ? `abatido por ${game.players[game.players[color].killedBy]?.name || NAMES[game.players[color].killedBy]}`
-                : position === null ? 'sobreviveu' : 'tempo/desistência'}
+                ? `abatido por ${nameOf(game.players, game.players[color].killedBy)}`
+                : position === null
+                  ? 'sobreviveu'
+                  : '—'}
             </span>
           </div>
         ))}
       </div>
 
-      <div className="gap-s" />
-      <div className="section-title">SUAS ESTATÍSTICAS</div>
-      <div className="w-full">
-        <div className="stat-row">
-          <span>RODADAS</span>
-          <span className="stat-val">{endStats.rounds}</span>
+      <div className="section-label">Suas estatísticas</div>
+      <div className="stat-grid">
+        <div className="stat-box">
+          <div className="sv">{endStats.rounds}</div>
+          <div className="sl">Rodadas</div>
         </div>
-        <div className="stat-row">
-          <span>TIROS DADOS</span>
-          <span className="stat-val">{endStats.shots}</span>
+        <div className="stat-box">
+          <div className="sv">{endStats.shots}</div>
+          <div className="sl">Tiros</div>
         </div>
-        <div className="stat-row">
-          <span>ACERTOS</span>
-          <span className="stat-val">{endStats.hits}</span>
+        <div className="stat-box">
+          <div className="sv">{endStats.hits}</div>
+          <div className="sl">Acertos</div>
         </div>
-        <div className="stat-row">
-          <span>ERROS</span>
-          <span className="stat-val">{endStats.misses}</span>
+        <div className="stat-box">
+          <div className="sv">{endStats.misses}</div>
+          <div className="sl">Erros</div>
         </div>
-        <div className="stat-row">
-          <span>PRECISÃO</span>
-          <span className="stat-val">{endStats.accuracy}%</span>
+        <div className="stat-box">
+          <div className="sv">{endStats.accuracy}%</div>
+          <div className="sl">Precisão</div>
         </div>
-        <div className="stat-row">
-          <span>VIDAS RESTANTES</span>
-          <span className="stat-val">{endStats.lives}</span>
+        <div className="stat-box">
+          <div className="sv">{endStats.lives}</div>
+          <div className="sl">Vidas restantes</div>
         </div>
-        {endStats.killedBy && (
-          <div className="stat-row">
-            <span>ABATIDO POR</span>
-            <span className="stat-val" style={{ color: CVARS[endStats.killedBy] }}>
-              {EMOJI[endStats.killedBy]} {game.players[endStats.killedBy]?.name || NAMES[endStats.killedBy]}
-            </span>
-          </div>
-        )}
       </div>
 
-      <div className="gap-l" />
       <button
         type="button"
-        className="btn"
+        className="btn btn--primary"
+        style={{ marginTop: 6 }}
         onClick={() => {
           actions.clearSession();
           window.location.reload();
         }}
       >
-        <span>NOVA PARTIDA</span>
+        Nova partida
       </button>
-    </div>
+    </Screen>
   );
 }
