@@ -11,6 +11,7 @@ import { JoinScreen } from './screens/JoinScreen';
 import { JoinColorScreen } from './screens/JoinColorScreen';
 import { LobbyScreen } from './screens/LobbyScreen';
 import { Overlays } from './screens/Overlays';
+import { TomatoFx } from './components/TomatoFx';
 import { WaitingScreen } from './screens/WaitingScreen';
 
 export default function App() {
@@ -58,6 +59,7 @@ export default function App() {
       <WaitingScreen active={screen === 'waiting'} state={state} actions={actions} />
       <EndScreen active={screen === 'end'} state={state} actions={actions} />
       <Overlays state={state} actions={actions} />
+      <TomatoFx tomato={state.tomato} players={game.players} />
       <HowTo open={showHelp} onClose={() => setShowHelp(false)} />
     </>
   );

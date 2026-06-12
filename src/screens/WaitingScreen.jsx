@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ArenaGrid } from '../components/ArenaGrid';
 import { Screen, Hearts } from '../components/Shell';
-import { IconHourglass } from '../components/Icons';
 import { CHEX, NAMES } from '../constants/game';
 
 function nameOf(player, color) {
@@ -10,9 +9,22 @@ function nameOf(player, color) {
 
 export function WaitingScreen({ active, state, actions }) {
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [tomatoPop, setTomatoPop] = useState(null);
+
+  // fecha o balão ao clicar em qualquer outro lugar
+  useEffect(() => {
+    if (!tomatoPop) return undefined;
+    const close = () => setTomatoPop(null);
+    const t = setTimeout(() => document.addEventListener('click', close), 0);
+    return () => {
+      clearTimeout(t);
+      document.removeEventListener('click', close);
+    };
+  }, [tomatoPop]);
+
   if (!active) return null;
 
-  const { game, myPlayer, waitingMsg, COLORS, activeTurnColor } = state;
+  const { game, myPlayer, waitingMsg, COLORS, activeTurnColor, tomato } = state;
   const accentHex = CHEX[activeTurnColor] || CHEX[game.myColor];
 
   return (
@@ -25,9 +37,6 @@ export function WaitingScreen({ active, state, actions }) {
       }
     >
       <div className="grow" style={{ display: 'flex', flexDirection: 'column', gap: 18, justifyContent: 'center' }}>
-        <div className="wait-ring">
-          <IconHourglass size={56} style={{ color: 'var(--accent)' }} />
-        </div>
         <div>
           <div className="wait-title">{waitingMsg}</div>
           <div className="wait-sub" style={{ marginTop: 10 }}>
@@ -41,11 +50,38 @@ export function WaitingScreen({ active, state, actions }) {
             const snap = game.roundSnapshot?.[c];
             const lives = snap?.lives ?? p.lives;
             const isTurn = c === activeTurnColor;
+            const canTomato = c !== game.myColor && !p.eliminated;
             return (
-              <div className="life-row" key={c} data-turn={isTurn ? 1 : undefined} data-dead={p.eliminated ? 1 : undefined} style={{ '--cc': CHEX[c] }}>
+              <div
+                className="life-row"
+                key={c}
+                data-color={c}
+                data-turn={isTurn ? 1 : undefined}
+                data-dead={p.eliminated ? 1 : undefined}
+                data-tomatoable={canTomato ? 1 : undefined}
+                data-hit={tomato?.target === c ? 1 : undefined}
+                style={{ '--cc': CHEX[c] }}
+                onClick={canTomato ? (e) => { e.stopPropagation(); setTomatoPop(tomatoPop === c ? null : c); } : undefined}
+                title={canTomato ? 'Jogar um tomate 🍅' : undefined}
+              >
+                {tomatoPop === c && (
+                  <div className="tomato-pop" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      className="tomato-pop-btn"
+                      title="Jogar tomate"
+                      onClick={() => {
+                        actions.throwTomato(c);
+                        setTomatoPop(null);
+                      }}
+                    >
+                      🍅
+                    </button>
+                  </div>
+                )}
                 <span className="nm">{nameOf(p, c)}</span>
                 {p.eliminated ? <span style={{ fontSize: 18 }}>💀</span> : <Hearts n={lives} />}
-                {isTurn && <span className="vez">Vez</span>}
+                {isTurn ? <span className="vez">Vez</span> : canTomato ? <span style={{ fontSize: 14, opacity: 0.45 }}>🍅</span> : null}
               </div>
             );
           })}

@@ -183,7 +183,7 @@ function StepMove({ state, actions }) {
           Tanque <span className="hl">escondido</span>
         </Prompt>
         <div className="confirm-bar">
-          Turno concluído
+          <span>✓ Turno concluído</span>
           <small>Mexa (ou não) sua peça no tabuleiro físico</small>
         </div>
         <button type="button" className="btn btn--success" onClick={actions.advanceTurn}>

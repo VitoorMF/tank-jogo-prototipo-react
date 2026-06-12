@@ -82,6 +82,8 @@ export function useTankBattle() {
   const [skillUsedThisRound, setSkillUsedThisRound] = useState(false);
   const [turnDone, setTurnDone] = useState(false);
   const [pendingSession, setPendingSession] = useState(null);
+  const [tomato, setTomato] = useState(null);
+  const tomatoTimerRef = useRef(null);
 
   const gameRef = useRef(game);
   const timerRef = useRef(null);
@@ -327,6 +329,13 @@ export function useTankBattle() {
     }
   }, [currentPlayer, setScreenSafely, showWaiting, startMyTurn, stopTimer]);
 
+  const showTomato = useCallback((payload) => {
+    if (!payload?.target) return;
+    setTomato({ ...payload, key: Date.now() });
+    window.clearTimeout(tomatoTimerRef.current);
+    tomatoTimerRef.current = window.setTimeout(() => setTomato(null), 1600);
+  }, []);
+
   const subscribe = useCallback(
     (roomCode) => {
       if (channelRef.current) db.removeChannel(channelRef.current);
@@ -340,11 +349,27 @@ export function useTankBattle() {
             applyShared(payload.new.state);
           },
         )
+        .on('broadcast', { event: 'tomato' }, ({ payload }) => {
+          showTomato(payload);
+        })
         .subscribe((status) => {
           setOnline(status === 'SUBSCRIBED');
         });
     },
-    [applyShared],
+    [applyShared, showTomato],
+  );
+
+  // Joga um tomate (cosmético) em outro jogador. Broadcast efêmero — não toca
+  // no estado do jogo. Mostra localmente também porque o broadcast não ecoa pro sender.
+  const throwTomato = useCallback(
+    (targetColor) => {
+      const g = gameRef.current;
+      if (!targetColor || targetColor === g.myColor) return;
+      const payload = { by: g.myColor, target: targetColor };
+      channelRef.current?.send({ type: 'broadcast', event: 'tomato', payload });
+      showTomato(payload);
+    },
+    [showTomato],
   );
 
   useEffect(() => {
@@ -609,11 +634,11 @@ export function useTankBattle() {
     const isDoubleShot = !!myEffects.doubleShot;
     const isSecondShot = isDoubleShot && g.doubleshotFired;
 
-    const alreadyShot =
-      g.boardShots.some((s) => coordKey(s.x, s.y) === key) ||
-      (g.pendingShot && coordKey(g.pendingShot.x, g.pendingShot.y) === key);
-    if (alreadyShot) {
-      showNotif('Essa coordenada já recebeu alvo.', 'miss');
+    // Atirar numa célula já demolida é permitido. Só evitamos repetir a MESMA
+    // coordenada dentro do mesmo turno (ex: 2º tiro do Tiro Duplo na mesma casa).
+    const repeatedThisTurn = g.pendingShot && coordKey(g.pendingShot.x, g.pendingShot.y) === key;
+    if (repeatedThisTurn) {
+      showNotif('Você já mirou aí neste turno.', 'miss');
       return;
     }
 
@@ -1083,6 +1108,7 @@ export function useTankBattle() {
       overlays,
       turnDone,
       pendingSession,
+      tomato,
       skillUsedThisRound,
       canStart,
       playersReadyCount,
@@ -1104,6 +1130,7 @@ export function useTankBattle() {
     actions: {
       setScreen: setScreenSafely,
       resumeSession,
+      throwTomato,
       setJoinCode,
       setMyName,
       selectColor,
