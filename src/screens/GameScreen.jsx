@@ -41,11 +41,43 @@ function StepCoord({ state, actions, onScan, skillUsedThisRound }) {
   const ready = game.shotCol && game.shotRow;
   const readout = ready ? `${game.shotCol}${game.shotRow}` : '—';
 
-  // Não pode atirar na própria zona. Desabilita os botões que formariam
-  // uma célula dentro da zona, considerando a outra seleção já feita.
+  // Helpers para conversão e bloqueio de zona (não atirar em si mesmo)
   const colToX = (c) => COLS.indexOf(c) + 1;
   const colDisabled = (c) => !!game.shotRow && isInsideZone(game.myColor, colToX(c), Number(game.shotRow));
   const rowDisabled = (n) => !!game.shotCol && isInsideZone(game.myColor, colToX(game.shotCol), n);
+
+  // Lógica para descobrir o HEX da zona almejada
+  let targetColorHex = undefined;
+  if (ready) {
+    const targetX = colToX(game.shotCol);
+    const targetY = Number(game.shotRow);
+
+    // Varre todas as cores registradas em CHEX e descobre a dona dessa célula
+    for (const colorKey of Object.keys(CHEX)) {
+      if (isInsideZone(colorKey, targetX, targetY)) {
+        targetColorHex = CHEX[colorKey];
+        break;
+      }
+    }
+  }
+
+  // Estilo dinâmico para o texto do alvo
+  const readoutStyle = targetColorHex
+    ? { color: targetColorHex, textShadow: `0 0 30px ${targetColorHex}66` }
+    : {};
+
+  // Estilo dinâmico para os botões selecionados (linha e coluna)
+  const getSegStyle = (isSelected) => {
+    if (isSelected && targetColorHex) {
+      return {
+        borderColor: targetColorHex,
+        backgroundColor: targetColorHex,
+        color: '#0a0a0a', // Cor escura para dar contraste com o fundo colorido
+        boxShadow: `0 0 14px ${targetColorHex}40`
+      };
+    }
+    return {};
+  };
 
   return (
     <div className="stack stack-14 fade-in">
@@ -63,7 +95,12 @@ function StepCoord({ state, actions, onScan, skillUsedThisRound }) {
 
       <div className="coord-readout">
         <span className="cap">Alvo</span>
-        <span className={`coord-big ${ready ? '' : 'empty'}`}>{readout}</span>
+        <span
+          className={`coord-big ${ready ? '' : 'empty'}`}
+          style={readoutStyle}
+        >
+          {readout}
+        </span>
       </div>
 
       <div className="picker">
@@ -73,18 +110,22 @@ function StepCoord({ state, actions, onScan, skillUsedThisRound }) {
             <span>A – H</span>
           </div>
           <div className="strip cols8">
-            {COLS.map((c) => (
-              <button
-                type="button"
-                className="seg"
-                key={c}
-                data-on={game.shotCol === c ? 1 : undefined}
-                disabled={colDisabled(c)}
-                onClick={() => actions.setShotCol(c)}
-              >
-                {c}
-              </button>
-            ))}
+            {COLS.map((c) => {
+              const isSelected = game.shotCol === c;
+              return (
+                <button
+                  type="button"
+                  className="seg"
+                  key={c}
+                  data-on={isSelected ? 1 : undefined}
+                  disabled={colDisabled(c)}
+                  onClick={() => actions.setShotCol(c)}
+                  style={getSegStyle(isSelected)}
+                >
+                  {c}
+                </button>
+              );
+            })}
           </div>
         </div>
         <div className="picker-block">
@@ -93,18 +134,22 @@ function StepCoord({ state, actions, onScan, skillUsedThisRound }) {
             <span>1 – 8</span>
           </div>
           <div className="strip cols8">
-            {ROWS.map((n) => (
-              <button
-                type="button"
-                className="seg"
-                key={n}
-                data-on={game.shotRow === String(n) ? 1 : undefined}
-                disabled={rowDisabled(n)}
-                onClick={() => actions.setShotRow(String(n))}
-              >
-                {n}
-              </button>
-            ))}
+            {ROWS.map((n) => {
+              const isSelected = game.shotRow === String(n);
+              return (
+                <button
+                  type="button"
+                  className="seg"
+                  key={n}
+                  data-on={isSelected ? 1 : undefined}
+                  disabled={rowDisabled(n)}
+                  onClick={() => actions.setShotRow(String(n))}
+                  style={getSegStyle(isSelected)}
+                >
+                  {n}
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
