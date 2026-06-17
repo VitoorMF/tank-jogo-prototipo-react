@@ -12,7 +12,7 @@ export function HomeScreen({ active, myName, onSetMyName, onCreate, onJoin, onHe
           <div className="logo">
             TANK
             <br />
-            BATTLE
+            WAR
           </div>
           <div className="logo-sub">Hybrid Board Game</div>
         </div>

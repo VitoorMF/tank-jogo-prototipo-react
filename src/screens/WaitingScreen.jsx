@@ -3,28 +3,30 @@ import { ArenaGrid } from '../components/ArenaGrid';
 import { Screen, Hearts } from '../components/Shell';
 import { CHEX, NAMES } from '../constants/game';
 
+const EMOTES = ['😂', '🫡', '😎', '👺', '💀', '🤝', '🖕'];
+
 function nameOf(player, color) {
   return player?.name?.trim() ? player.name.toUpperCase() : NAMES[color];
 }
 
 export function WaitingScreen({ active, state, actions }) {
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
-  const [tomatoPop, setTomatoPop] = useState(null);
+  const [popCard, setPopCard] = useState(null);
 
   // fecha o balão ao clicar em qualquer outro lugar
   useEffect(() => {
-    if (!tomatoPop) return undefined;
-    const close = () => setTomatoPop(null);
+    if (!popCard) return undefined;
+    const close = () => setPopCard(null);
     const t = setTimeout(() => document.addEventListener('click', close), 0);
     return () => {
       clearTimeout(t);
       document.removeEventListener('click', close);
     };
-  }, [tomatoPop]);
+  }, [popCard]);
 
   if (!active) return null;
 
-  const { game, myPlayer, waitingMsg, COLORS, activeTurnColor, tomato } = state;
+  const { game, myPlayer, waitingMsg, COLORS, activeTurnColor, tomatoes } = state;
   const accentHex = CHEX[activeTurnColor] || CHEX[game.myColor];
 
   return (
@@ -50,7 +52,8 @@ export function WaitingScreen({ active, state, actions }) {
             const snap = game.roundSnapshot?.[c];
             const lives = snap?.lives ?? p.lives;
             const isTurn = c === activeTurnColor;
-            const canTomato = c !== game.myColor && !p.eliminated;
+            const isMe = c === game.myColor;
+            const canInteract = !p.eliminated; // meu card => emotes; outro => tomate
             return (
               <div
                 className="life-row"
@@ -58,13 +61,30 @@ export function WaitingScreen({ active, state, actions }) {
                 data-color={c}
                 data-turn={isTurn ? 1 : undefined}
                 data-dead={p.eliminated ? 1 : undefined}
-                data-tomatoable={canTomato ? 1 : undefined}
-                data-hit={tomato?.target === c ? 1 : undefined}
+                data-tomatoable={canInteract && !isMe ? 1 : undefined}
+                data-hit={tomatoes?.some((t) => t.target === c) ? 1 : undefined}
                 style={{ '--cc': CHEX[c] }}
-                onClick={canTomato ? (e) => { e.stopPropagation(); setTomatoPop(tomatoPop === c ? null : c); } : undefined}
-                title={canTomato ? 'Jogar um tomate 🍅' : undefined}
+                onClick={canInteract ? (e) => { e.stopPropagation(); setPopCard(popCard === c ? null : c); } : undefined}
+                title={canInteract ? (isMe ? 'Mandar um emote' : 'Jogar um tomate 🍅') : undefined}
               >
-                {tomatoPop === c && (
+                {popCard === c && isMe && (
+                  <div className="emote-pop" onClick={(e) => e.stopPropagation()}>
+                    {EMOTES.map((em) => (
+                      <button
+                        type="button"
+                        className="emote-pop-btn"
+                        key={em}
+                        onClick={() => {
+                          actions.sendEmote(em);
+                          setPopCard(null);
+                        }}
+                      >
+                        {em}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {popCard === c && !isMe && (
                   <div className="tomato-pop" onClick={(e) => e.stopPropagation()}>
                     <button
                       type="button"
@@ -72,7 +92,7 @@ export function WaitingScreen({ active, state, actions }) {
                       title="Jogar tomate"
                       onClick={() => {
                         actions.throwTomato(c);
-                        setTomatoPop(null);
+                        setPopCard(null);
                       }}
                     >
                       🍅
@@ -81,7 +101,11 @@ export function WaitingScreen({ active, state, actions }) {
                 )}
                 <span className="nm">{nameOf(p, c)}</span>
                 {p.eliminated ? <span style={{ fontSize: 18 }}>💀</span> : <Hearts n={lives} />}
-                {isTurn ? <span className="vez">Vez</span> : canTomato ? <span style={{ fontSize: 14, opacity: 0.45 }}>🍅</span> : null}
+                {isTurn ? (
+                  <span className="vez">Vez</span>
+                ) : canInteract ? (
+                  <span style={{ fontSize: 14, opacity: 0.45 }}>{isMe ? '😎' : '🍅'}</span>
+                ) : null}
               </div>
             );
           })}

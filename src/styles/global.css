@@ -369,6 +369,38 @@ button,input{font:inherit;}
 .tomato-pop-btn:hover{background:rgba(255,75,75,.14);}
 .tomato-pop-btn:active{transform:scale(.85);}
 @keyframes tomato-pop-in{from{opacity:0;transform:translateX(-50%) translateY(6px) scale(.9);}to{opacity:1;transform:translateX(-50%) translateY(0) scale(1);}}
+/* balão de emotes (no próprio card) — várias opções em fileira */
+.emote-pop{
+  position:absolute;left:50%;top:-58px;transform:translateX(-50%);z-index:30;
+  background:var(--panel-hi);border:1px solid var(--line-2);border-radius:12px;
+  padding:6px;box-shadow:0 8px 22px rgba(0,0,0,.55);
+  display:flex;gap:2px;animation:tomato-pop-in .14s ease;
+}
+.emote-pop::after{
+  content:"";position:absolute;bottom:-6px;left:50%;transform:translateX(-50%) rotate(45deg);
+  width:12px;height:12px;background:var(--panel-hi);border-right:1px solid var(--line-2);border-bottom:1px solid var(--line-2);
+}
+.emote-pop-btn{
+  background:none;border:none;cursor:pointer;font-size:26px;line-height:1;
+  padding:3px 6px;border-radius:8px;transition:transform .1s, background .12s;
+}
+.emote-pop-btn:hover{background:rgba(255,255,255,.08);}
+.emote-pop-btn:active{transform:scale(.8);}
+/* emote flutuando sobre o card de quem mandou */
+.emote-fx{position:fixed;inset:0;z-index:140;pointer-events:none;}
+.emote-fx .emote-bubble{
+  position:fixed;left:var(--ex,50%);top:var(--ey,40vh);
+  font-size:44px;line-height:1;transform:translate(-50%,-50%);
+  filter:drop-shadow(0 4px 10px rgba(0,0,0,.5));
+  animation:emote-float 2.2s ease-out forwards;
+}
+@keyframes emote-float{
+  0%{transform:translate(-50%,-50%) scale(.3);opacity:0;}
+  14%{transform:translate(-50%,-70%) scale(1.25);opacity:1;}
+  30%{transform:translate(-50%,-90%) scale(1);opacity:1;}
+  78%{transform:translate(-50%,-170%) scale(1);opacity:1;}
+  100%{transform:translate(-50%,-230%) scale(.9);opacity:0;}
+}
 .life-row[data-turn="1"]{background:linear-gradient(90deg,color-mix(in srgb,var(--cc) 14%,transparent),transparent);border:1px solid color-mix(in srgb,var(--cc) 40%,var(--line));}
 .life-row[data-turn="1"]::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--cc);}
 .life-row[data-dead="1"]{opacity:.45;}

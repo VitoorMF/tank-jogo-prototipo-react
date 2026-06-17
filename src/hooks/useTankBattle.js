@@ -46,6 +46,8 @@ const initialGame = {
   roundSnapshot: null,
   eliminationOrder: [],
   sabotagedColor: null,
+  turnStartedAt: null,
+  turnSeconds: TURN_DURATION_SECONDS,
 };
 
 function normalizeSharedState(state) {
@@ -66,6 +68,8 @@ function normalizeSharedState(state) {
     roundSnapshot: state?.roundSnapshot || null,
     eliminationOrder: state?.eliminationOrder || [],
     sabotagedColor: state?.sabotagedColor || null,
+    turnStartedAt: state?.turnStartedAt || null,
+    turnSeconds: state?.turnSeconds || TURN_DURATION_SECONDS,
   };
 }
 
@@ -75,18 +79,18 @@ export function useTankBattle() {
   const [joinCode, setJoinCode] = useState('');
   const [myName, setMyNameState] = useState(() => localStorage.getItem(NAME_KEY) || '');
   const [timerValue, setTimerValue] = useState(TURN_DURATION_SECONDS);
-  const [effectiveTurnDuration, setEffectiveTurnDuration] = useState(TURN_DURATION_SECONDS);
   const [notif, setNotif] = useState({ show: false, msg: '', type: 'info' });
   const [online, setOnline] = useState(false);
   const [overlays, setOverlays] = useState({ hit: false, elim: false, elimAnnounce: null, viewLives: false, skillActivated: null, missileTarget: false, shieldAbsorbed: false });
   const [skillUsedThisRound, setSkillUsedThisRound] = useState(false);
   const [turnDone, setTurnDone] = useState(false);
   const [pendingSession, setPendingSession] = useState(null);
-  const [tomato, setTomato] = useState(null);
-  const tomatoTimerRef = useRef(null);
+  const [tomatoes, setTomatoes] = useState([]);
+  const [emotes, setEmotes] = useState([]);
 
   const gameRef = useRef(game);
-  const timerRef = useRef(null);
+  const myNameRef = useRef(myName);
+  const advancedForIdxRef = useRef(-1);
   const channelRef = useRef(null);
   const prevLivesRef = useRef(3);
   const prevShieldRef = useRef(false);
@@ -98,6 +102,10 @@ export function useTankBattle() {
   useEffect(() => {
     gameRef.current = game;
   }, [game]);
+
+  useEffect(() => {
+    myNameRef.current = myName;
+  }, [myName]);
 
   const showNotif = useCallback((msg, type = 'info') => {
     setNotif({ show: true, msg, type });
@@ -149,6 +157,8 @@ export function useTankBattle() {
       roundSnapshot: g.roundSnapshot,
       eliminationOrder: g.eliminationOrder,
       sabotagedColor: g.sabotagedColor,
+      turnStartedAt: g.turnStartedAt,
+      turnSeconds: g.turnSeconds,
     };
   }, []);
 
@@ -176,15 +186,7 @@ export function useTankBattle() {
     return g.turnOrder[g.currentTurnIdx % g.turnOrder.length] || null;
   }, []);
 
-  const stopTimer = useCallback(() => {
-    if (timerRef.current) {
-      window.clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-  }, []);
-
   const advanceTurn = useCallback(async () => {
-    stopTimer();
     setTurnDone(false);
 
     const g = gameRef.current;
@@ -192,6 +194,10 @@ export function useTankBattle() {
     const nextTurnOrder = [...g.turnOrder];
     const nextIdx = g.currentTurnIdx + 1;
     const nextRound = nextTurnOrder.length && nextIdx % nextTurnOrder.length === 0 ? g.round + 1 : g.round;
+
+    // Duração do próximo turno: 45s se o próximo jogador foi sabotado, senão 120s.
+    const nextColor = nextTurnOrder.length ? nextTurnOrder[nextIdx % nextTurnOrder.length] : null;
+    const sabotaged = !!nextColor && g.sabotagedColor === nextColor;
 
     const alive = nextTurnOrder.filter((c) => !nextPlayers[c].eliminated);
     const nextGame = {
@@ -209,42 +215,21 @@ export function useTankBattle() {
       doubleshotFired: false,
       shotCol: '',
       shotRow: '',
+      sabotagedColor: sabotaged ? null : g.sabotagedColor,
+      // Timer baseado em timestamp compartilhado (não em contagem local).
+      turnStartedAt: Date.now(),
+      turnSeconds: sabotaged ? SABOTAGE_DURATION_SECONDS : TURN_DURATION_SECONDS,
       gameOver: alive.length <= 1,
       winner: alive.length <= 1 ? alive[0] || null : null,
     };
 
     setGame(nextGame);
     await push(nextGame);
-  }, [push, stopTimer]);
-
-  const tickTimer = useCallback((nextValue) => {
-    setTimerValue(nextValue);
-  }, []);
-
-  const startTimer = useCallback((duration = TURN_DURATION_SECONDS) => {
-    stopTimer();
-    let value = duration;
-    setEffectiveTurnDuration(duration);
-    tickTimer(value);
-
-    timerRef.current = window.setInterval(() => {
-      value -= 1;
-      tickTimer(value);
-
-      if (value <= 0) {
-        stopTimer();
-        showNotif('⏰ TEMPO ESGOTADO!', 'miss');
-        advanceTurn();
-      }
-    }, 1000);
-  }, [advanceTurn, showNotif, stopTimer, tickTimer]);
+  }, [push]);
 
   const startMyTurn = useCallback(() => {
     const g = gameRef.current;
     prevLivesRef.current = g.players[g.myColor]?.lives || 3;
-
-    const sabotaged = g.sabotagedColor === g.myColor;
-    const duration = sabotaged ? SABOTAGE_DURATION_SECONDS : TURN_DURATION_SECONDS;
 
     setSkillUsedThisRound(false);
     setTurnDone(false);
@@ -263,30 +248,26 @@ export function useTankBattle() {
       doubleshotFired: false,
       shotCol: '',
       shotRow: '',
-      sabotagedColor: sabotaged ? null : g.sabotagedColor,
       roundSnapshot: snapshot,
     };
     setGame(nextGame);
     push(nextGame);
 
-    if (sabotaged) {
+    if ((g.turnSeconds || TURN_DURATION_SECONDS) < TURN_DURATION_SECONDS) {
       showNotif('⏱️ TURNO SABOTADO! Apenas 45s', 'miss');
     }
 
     setScreenSafely('game');
-    startTimer(duration);
-  }, [push, setScreenSafely, showNotif, startTimer]);
+  }, [push, setScreenSafely, showNotif]);
 
   const showWaiting = useCallback(() => {
-    stopTimer();
     setScreenSafely('waiting');
-  }, [setScreenSafely, stopTimer]);
+  }, [setScreenSafely]);
 
   const reactToState = useCallback(() => {
     const g = gameRef.current;
 
     if (g.gameOver) {
-      stopTimer();
       setScreenSafely('end');
       return;
     }
@@ -327,13 +308,22 @@ export function useTankBattle() {
     } else if (g.currentStep === 0) {
       showWaiting();
     }
-  }, [currentPlayer, setScreenSafely, showWaiting, startMyTurn, stopTimer]);
+  }, [currentPlayer, setScreenSafely, showWaiting, startMyTurn]);
 
+  // Cada tomate/emote vive na sua própria entrada da lista e se remove ao fim
+  // da animação. Assim vários simultâneos aparecem juntos, sem cortar uns aos outros.
   const showTomato = useCallback((payload) => {
     if (!payload?.target) return;
-    setTomato({ ...payload, key: Date.now() });
-    window.clearTimeout(tomatoTimerRef.current);
-    tomatoTimerRef.current = window.setTimeout(() => setTomato(null), 1600);
+    const key = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    setTomatoes((list) => [...list, { ...payload, key }]);
+    window.setTimeout(() => setTomatoes((list) => list.filter((t) => t.key !== key)), 1600);
+  }, []);
+
+  const showEmote = useCallback((payload) => {
+    if (!payload?.emote) return;
+    const key = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    setEmotes((list) => [...list, { ...payload, key }]);
+    window.setTimeout(() => setEmotes((list) => list.filter((e) => e.key !== key)), 2200);
   }, []);
 
   const subscribe = useCallback(
@@ -352,11 +342,14 @@ export function useTankBattle() {
         .on('broadcast', { event: 'tomato' }, ({ payload }) => {
           showTomato(payload);
         })
+        .on('broadcast', { event: 'emote' }, ({ payload }) => {
+          showEmote(payload);
+        })
         .subscribe((status) => {
           setOnline(status === 'SUBSCRIBED');
         });
     },
-    [applyShared, showTomato],
+    [applyShared, showTomato, showEmote],
   );
 
   // Joga um tomate (cosmético) em outro jogador. Broadcast efêmero — não toca
@@ -372,6 +365,18 @@ export function useTankBattle() {
     [showTomato],
   );
 
+  // Manda um emote (cosmético) que aparece sobre o próprio card, pra todos.
+  const sendEmote = useCallback(
+    (emoteChar) => {
+      const g = gameRef.current;
+      if (!emoteChar || !g.myColor) return;
+      const payload = { by: g.myColor, emote: emoteChar };
+      channelRef.current?.send({ type: 'broadcast', event: 'emote', payload });
+      showEmote(payload);
+    },
+    [showEmote],
+  );
+
   useEffect(() => {
     reactToState();
   }, [
@@ -385,6 +390,50 @@ export function useTankBattle() {
     game.currentStep,
     reactToState,
   ]);
+
+  // Timer baseado em timestamp compartilhado. Roda em TODOS os clientes durante
+  // a partida e calcula o tempo restante a partir de turnStartedAt — então
+  // resiste ao congelamento de background. Quando o tempo esgota:
+  //  - o jogador da vez avança o turno (comportamento normal);
+  //  - se ele sumiu, um failsafe (host após 3s; outros após 6s) avança por ele,
+  //    para a partida nunca travar.
+  useEffect(() => {
+    if (!game.gameStarted || game.gameOver || !game.turnStartedAt) {
+      setTimerValue(game.turnSeconds || TURN_DURATION_SECONDS);
+      return undefined;
+    }
+
+    const tick = () => {
+      const g = gameRef.current;
+      if (!g.turnStartedAt || !g.turnOrder.length) return;
+      const seconds = g.turnSeconds || TURN_DURATION_SECONDS;
+      const elapsed = Math.floor((Date.now() - g.turnStartedAt) / 1000);
+      const remaining = seconds - elapsed;
+      setTimerValue(Math.max(0, remaining));
+
+      const activeColor = g.turnOrder[g.currentTurnIdx % g.turnOrder.length];
+      const iAmActive = activeColor === g.myColor;
+
+      if (advancedForIdxRef.current === g.currentTurnIdx) return; // já avancei este turno
+
+      if (remaining <= 0 && iAmActive && !intentionalLeaveRef.current) {
+        advancedForIdxRef.current = g.currentTurnIdx;
+        showNotif('⏰ TEMPO ESGOTADO!', 'miss');
+        advanceTurn();
+      } else if (!iAmActive) {
+        // failsafe: o jogador da vez não avançou (provavelmente offline)
+        const margin = g.isHost ? 3 : 6;
+        if (remaining <= -margin) {
+          advancedForIdxRef.current = g.currentTurnIdx;
+          advanceTurn();
+        }
+      }
+    };
+
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, [game.gameStarted, game.gameOver, game.turnStartedAt, game.currentTurnIdx, game.turnSeconds, advanceTurn, showNotif]);
 
   const setMyName = useCallback((value) => {
     const trimmed = value.slice(0, 16);
@@ -406,7 +455,7 @@ export function useTankBattle() {
     const roomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
     const players = mkPlayers();
     players[g.myColor].active = true;
-    players[g.myColor].name = myName.trim();
+    players[g.myColor].name = (myNameRef.current || '').trim();
 
     const nextGame = {
       ...g,
@@ -507,7 +556,7 @@ export function useTankBattle() {
     const parsed = normalizeSharedState(st);
     const players = clonePlayers(parsed.players);
     players[g.myColor].active = true;
-    players[g.myColor].name = myName.trim();
+    players[g.myColor].name = (myNameRef.current || '').trim();
 
     const nextGame = {
       ...g,
@@ -534,7 +583,6 @@ export function useTankBattle() {
   const leaveRoom = useCallback(async () => {
     intentionalLeaveRef.current = true;
     clearSession();
-    stopTimer();
 
     const g = gameRef.current;
 
@@ -558,7 +606,7 @@ export function useTankBattle() {
     setSkillUsedThisRound(false);
     setTurnDone(false);
     setPendingSession(null);
-  }, [clearSession, push, stopTimer]);
+  }, [clearSession, push]);
 
   const startGame = useCallback(async () => {
     const g = gameRef.current;
@@ -579,6 +627,9 @@ export function useTankBattle() {
       roundSnapshot: clonePlayers(players),
       shotCol: '',
       shotRow: '',
+      sabotagedColor: null,
+      turnStartedAt: Date.now(),
+      turnSeconds: TURN_DURATION_SECONDS,
     };
 
     setGame(nextGame);
@@ -734,19 +785,17 @@ export function useTankBattle() {
         showNotif('Mova dentro da sua zona!', 'miss');
         return;
       }
-      const myEffects = g.players[g.myColor]?.activeEffects || {};
-      setGame((prev) => {
-        const players = clonePlayers(prev.players);
-        players[prev.myColor].pos = { x, y };
-        if (myEffects.jump) {
-          players[prev.myColor].activeEffects = { ...players[prev.myColor].activeEffects, jump: false };
-        }
-        return { ...prev, players };
-      });
-      stopTimer();
+      const players = clonePlayers(g.players);
+      players[g.myColor].pos = { x, y };
+      if (players[g.myColor].activeEffects?.jump) {
+        players[g.myColor].activeEffects = { ...players[g.myColor].activeEffects, jump: false };
+      }
+      const nextGame = { ...g, players };
+      setGame(nextGame);
+      push(nextGame); // sincroniza a posição já no movimento (failsafe usa isso)
       setTurnDone(true);
     },
-    [showNotif, stopTimer, turnDone],
+    [push, showNotif, turnDone],
   );
 
   const dismissEliminationAnnounce = useCallback(() => {
@@ -1046,11 +1095,10 @@ export function useTankBattle() {
     document.addEventListener('visibilitychange', onVisibility);
 
     return () => {
-      stopTimer();
       document.removeEventListener('visibilitychange', onVisibility);
       if (channelRef.current) db.removeChannel(channelRef.current);
     };
-  }, [applyShared, loadSession, reconnectToSession, stopTimer, subscribe]);
+  }, [applyShared, loadSession, reconnectToSession, subscribe]);
 
   useEffect(() => {
     if (pendingSkillRef.current && game.roomCode && game.myColor && game.gameStarted) {
@@ -1108,7 +1156,8 @@ export function useTankBattle() {
       overlays,
       turnDone,
       pendingSession,
-      tomato,
+      tomatoes,
+      emotes,
       skillUsedThisRound,
       canStart,
       playersReadyCount,
@@ -1119,7 +1168,7 @@ export function useTankBattle() {
       turnBadge,
       hearts: myPlayer ? hearts(myPlayer.lives) : '❤️❤️❤️',
       coordLabel,
-      turnDuration: effectiveTurnDuration,
+      turnDuration: game.turnSeconds || TURN_DURATION_SECONDS,
       NAMES,
       CVARS,
       CHEX,
@@ -1131,6 +1180,7 @@ export function useTankBattle() {
       setScreen: setScreenSafely,
       resumeSession,
       throwTomato,
+      sendEmote,
       setJoinCode,
       setMyName,
       selectColor,
